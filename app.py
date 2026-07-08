@@ -803,14 +803,13 @@ def tournament_detail(tid):
         for g in range(1, tournament["groups_count"] + 1):
             group_pairs = [p for p in pairs if p["group_number"] == g]
             group_pair_ids = [p["id"] for p in group_pairs]
-            group_matches = sorted(
-                [m for m in matches if m["stage"] == "group" and m["group_number"] == g],
-                key=lambda m: m["match_index"],
-            )
-            completed = [m for m in group_matches if m["winner_pair_id"]]
+            group_matches_all = [m for m in matches if m["stage"] == "group" and m["group_number"] == g]
+            completed = [m for m in group_matches_all if m["winner_pair_id"]]
+            # display order: matches still waiting on a result float to the top
+            group_matches = sorted(group_matches_all, key=lambda m: (m["winner_pair_id"] is not None, m["match_index"]))
             tiebreak_matches = sorted(
                 [m for m in matches if m["stage"] == "tiebreak" and m["group_number"] == g],
-                key=lambda m: m["match_index"],
+                key=lambda m: (m["winner_pair_id"] is not None, m["match_index"]),
             )
             tiebreak_winners = {
                 frozenset((m["pair_a_id"], m["pair_b_id"])): m["winner_pair_id"]
@@ -850,10 +849,14 @@ def tournament_detail(tid):
                 and all(m["winner_pair_id"] for m in legs)
                 and engine.resolve_matchup(legs[0]["pair_a_id"], legs[0]["pair_b_id"], legs) is None
             )
+            resolved = engine.resolve_matchup(legs[0]["pair_a_id"], legs[0]["pair_b_id"], rows) is not None
             matchups.append({
                 "match_index": idx, "legs": legs, "decider": decider, "needs_decider": needs_decider,
                 "pair_a": pairs_by_id[legs[0]["pair_a_id"]], "pair_b": pairs_by_id[legs[0]["pair_b_id"]],
+                "resolved": resolved,
             })
+        # display order: matchups still waiting on a result float to the top
+        matchups.sort(key=lambda mu: (mu["resolved"], mu["match_index"]))
         knockout_stages.append((stage, matchups))
 
     winner_pair = pairs_by_id.get(tournament.get("winner_pair_id"))
