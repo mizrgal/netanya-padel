@@ -102,6 +102,10 @@ def update_user(user_id, updates):
     db_patch("padel_users", f"id=eq.{user_id}", updates)
 
 
+def list_users():
+    return db_get("/rest/v1/padel_users?select=*&order=created_at.desc")
+
+
 def search_users(q, exclude_ids=()):
     like = quote(f"%{q}%")
     rows = db_get(
@@ -537,6 +541,50 @@ def admin_user_new():
             flash(msg, "success")
             return redirect(url_for("admin_user_new"))
     return render_template("admin_user_new.html")
+
+
+@app.route("/admin/users")
+@admin_required
+def admin_users():
+    users = list_users()
+    return render_template("admin_users.html", users=users)
+
+
+@app.route("/admin/users/<uid>/edit", methods=["GET", "POST"])
+@admin_required
+def admin_user_edit(uid):
+    user = get_user_by_id(uid)
+    if not user:
+        return redirect(url_for("admin_users"))
+
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        phone = request.form.get("phone", "").strip()
+        password = request.form.get("password", "").strip()
+        is_admin = request.form.get("is_admin") == "on"
+
+        existing = get_user_by_username(username) if username else None
+        if not username or not phone:
+            flash("נא למלא שם משתמש וטלפון", "error")
+        elif existing and existing["id"] != uid:
+            flash("שם המשתמש כבר תפוס", "error")
+        elif password and len(password) < 4:
+            flash("סיסמה חדשה חייבת להכיל לפחות 4 תווים", "error")
+        elif uid == session["user_id"] and not is_admin:
+            flash("אי אפשר להסיר הרשאת אדמין מעצמך", "error")
+        else:
+            updates = {"username": username, "phone": phone, "is_admin": is_admin}
+            if password:
+                updates["password_hash"] = generate_password_hash(password)
+            update_user(uid, updates)
+            if uid == session["user_id"]:
+                session["username"] = username
+                session["is_admin"] = is_admin
+            flash("הפרטים עודכנו בהצלחה", "success")
+            return redirect(url_for("admin_users"))
+        return render_template("admin_user_edit.html", user=user)
+
+    return render_template("admin_user_edit.html", user=user)
 
 
 # ─── Tournament detail, registration, draw, scoring ─────────────────────────

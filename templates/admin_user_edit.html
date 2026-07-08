@@ -1,0 +1,25 @@
+{% extends "base_app.html" %}
+{% block title %}עריכת {{ user.username }} – Netanya Padel{% endblock %}
+{% block content %}
+  <h1>עריכת משתמש</h1>
+  <div class="card" style="max-width:420px;">
+    <form method="POST" action="{{ url_for('admin_user_edit', uid=user.id) }}">
+      <label>שם משתמש</label>
+      <input type="text" name="username" value="{{ user.username }}" required>
+
+      <label>טלפון</label>
+      <input type="tel" name="phone" value="{{ user.phone }}" required>
+
+      <label>סיסמה חדשה</label>
+      <input type="password" name="password" placeholder="השאר ריק כדי לא לשנות">
+
+      <label style="display:flex; align-items:center; gap:8px; margin-bottom:18px;">
+        <input type="checkbox" name="is_admin" style="width:auto; min-height:auto; margin:0;" {% if user.is_admin %}checked{% endif %}>
+        אדמין
+      </label>
+
+      <button type="submit" class="btn-block btn-gold">שמירה</button>
+    </form>
+  </div>
+  <p style="margin-top:14px;"><a href="{{ url_for('admin_users') }}" class="muted">← חזרה לרשימת המשתמשים</a></p>
+{% endblock %}
