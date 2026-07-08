@@ -1,7 +1,7 @@
 {% extends "base_app.html" %}
 {% block title %}{{ tournament.name }} – Netanya Padel{% endblock %}
 
-{% macro pair_name(pair) %}{{ pair.player1_name }} / {{ pair.player2_name }}{% endmacro %}
+{% from "macros.html" import pair_name %}
 
 {% macro match_row(m, label) %}
 <div class="match-card">

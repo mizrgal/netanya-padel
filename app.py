@@ -31,6 +31,7 @@ STAGE_LABELS = {
     "final": "גמר",
 }
 app.jinja_env.globals["STAGE_LABELS"] = STAGE_LABELS
+STAGE_SORT_ORDER = {"group": 0, "quarterfinal": 1, "semifinal": 2, "final": 3}
 
 STATUS_LABELS = {
     "open": "פתוח להרשמה",
@@ -145,6 +146,14 @@ def update_tournament_status(tid, status, winner_pair_id=None):
 
 def list_pairs(tid):
     return db_get(f"/rest/v1/padel_pairs?tournament_id=eq.{quote(tid)}&select=*&order=created_at.asc")
+
+
+def list_pairs_for_user(user_id):
+    uid = quote(user_id)
+    return db_get(
+        f"/rest/v1/padel_pairs?or=(player1_id.eq.{uid},player2_id.eq.{uid})"
+        f"&select=*&order=created_at.desc"
+    )
 
 
 def create_pair(tournament_id, p1_id, p1_name, p1_phone, p2_id, p2_name, p2_phone, added_by):
@@ -400,11 +409,47 @@ def logout():
     return redirect(url_for("login_page"))
 
 
+def build_profile_history(user_id):
+    """One entry per tournament the user has a pair in: who their partner was, whether
+    they were crowned champion, and every match their pair played with its result."""
+    history = []
+    for pair in list_pairs_for_user(user_id):
+        tournament = get_tournament(pair["tournament_id"])
+        if not tournament:
+            continue
+        partner_name = pair["player2_name"] if pair["player1_id"] == user_id else pair["player1_name"]
+        pairs_by_id = {p["id"]: p for p in list_pairs(pair["tournament_id"])}
+
+        my_matches = []
+        for m in list_matches(pair["tournament_id"]):
+            if m["pair_a_id"] != pair["id"] and m["pair_b_id"] != pair["id"]:
+                continue
+            opponent_id = m["pair_b_id"] if m["pair_a_id"] == pair["id"] else m["pair_a_id"]
+            my_matches.append({
+                "stage": m["stage"],
+                "opponent": pairs_by_id.get(opponent_id),
+                "score_a": m["score_a"], "score_b": m["score_b"],
+                "played": m["winner_pair_id"] is not None,
+                "won": (m["winner_pair_id"] == pair["id"]) if m["winner_pair_id"] else None,
+            })
+        my_matches.sort(key=lambda mm: STAGE_SORT_ORDER.get(mm["stage"], 99))
+
+        history.append({
+            "tournament": tournament,
+            "partner_name": partner_name,
+            "is_champion": tournament.get("winner_pair_id") == pair["id"],
+            "matches": my_matches,
+        })
+    history.sort(key=lambda h: h["tournament"]["date"], reverse=True)
+    return history
+
+
 @app.route("/profile")
 @login_required
 def profile():
     user = get_user_by_id(session["user_id"])
-    return render_template("profile.html", user=user)
+    history = build_profile_history(user["id"])
+    return render_template("profile.html", user=user, history=history)
 
 
 @app.route("/profile/phone", methods=["POST"])
