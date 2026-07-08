@@ -3,6 +3,37 @@
 
 {% macro pair_name(pair) %}{{ pair.player1_name }} / {{ pair.player2_name }}{% endmacro %}
 
+{% macro match_row(m, label) %}
+<div class="match-card">
+  <div class="match-pairs">{% if label %}{{ label }}: {% endif %}{{ pair_name(pairs_by_id[m.pair_a_id]) }} נגד {{ pair_name(pairs_by_id[m.pair_b_id]) }}</div>
+  {% if m.winner_pair_id %}
+    <div class="match-result">
+      <div class="match-score">{{ m.score_a }} : {{ m.score_b }}</div>
+      {% if session.get('is_admin') and m.stage in editable_stages %}
+        <details class="edit-toggle">
+          <summary>ערוך</summary>
+          <form method="POST" action="{{ url_for('submit_score', mid=m.id) }}" class="score-form">
+            <input type="number" name="score_a" min="0" value="{{ m.score_a }}" required>
+            <span>:</span>
+            <input type="number" name="score_b" min="0" value="{{ m.score_b }}" required>
+            <button type="submit" class="btn-small">עדכן</button>
+          </form>
+        </details>
+      {% endif %}
+    </div>
+  {% elif session.get('is_admin') and tournament.status == 'in_progress' %}
+    <form method="POST" action="{{ url_for('submit_score', mid=m.id) }}" class="score-form">
+      <input type="number" name="score_a" min="0" required>
+      <span>:</span>
+      <input type="number" name="score_b" min="0" required>
+      <button type="submit" class="btn-small">שמור</button>
+    </form>
+  {% else %}
+    <div class="match-score pending">טרם שוחק</div>
+  {% endif %}
+</div>
+{% endmacro %}
+
 {% macro player_slot(prefix, label, allow_new) %}
 <div class="slot" data-prefix="{{ prefix }}">
   <label>{{ label }}</label>
@@ -95,35 +126,25 @@
     <h2>שלב הבתים</h2>
     {% for g, data in groups.items() %}
       <div class="group-block">
-        <h2 style="margin-top:0;">בית {{ g }}</h2>
-        <table style="margin-bottom:10px;">
-          <tr><th>#</th><th>זוג</th><th>נצחונות</th><th>הפרש</th><th>הפרשי משחקים</th></tr>
-          {% for row in data.standings %}
-            <tr class="{{ 'rank-1' if loop.index == 1 else ('rank-2' if loop.index == 2 else '') }}">
-              <td>{{ loop.index }}</td>
-              <td>{{ pair_name(row.pair) }}</td>
-              <td>{{ row.wins }}</td>
-              <td>{{ row.games_won - row.games_lost }}</td>
-              <td>{{ row.games_won }}:{{ row.games_lost }}</td>
-            </tr>
-          {% endfor %}
-        </table>
-        {% for m in data.matches %}
-          <div class="match-card">
-            <div class="match-pairs">מחזור {{ m.round_number }}: {{ pair_name(pairs_by_id[m.pair_a_id]) }} נגד {{ pair_name(pairs_by_id[m.pair_b_id]) }}</div>
-            {% if m.winner_pair_id %}
-              <div class="match-score">{{ m.score_a }} : {{ m.score_b }}</div>
-            {% elif session.get('is_admin') and tournament.status == 'in_progress' %}
-              <form method="POST" action="{{ url_for('submit_score', mid=m.id) }}" class="score-form">
-                <input type="number" name="score_a" min="0" required>
-                <span>:</span>
-                <input type="number" name="score_b" min="0" required>
-                <button type="submit" class="btn-small">שמור</button>
-              </form>
-            {% else %}
-              <div class="match-score pending">טרם שוחק</div>
-            {% endif %}
+        <h2 class="group-heading">בית {{ g }}</h2>
+        <div class="standings-card">
+          <div class="table-scroll">
+            <table class="standings-table">
+              <tr><th>#</th><th>זוג</th><th>נצחונות</th><th>הפרש משחקים</th></tr>
+              {% for row in data.standings %}
+                <tr class="{{ 'rank-1' if loop.index == 1 else ('rank-2' if loop.index == 2 else '') }}">
+                  <td><span class="rank-badge rank-badge-{{ loop.index }}">{{ loop.index }}</span></td>
+                  <td class="pair-cell">{{ pair_name(row.pair) }}</td>
+                  <td>{{ row.wins }}</td>
+                  <td>{{ '+' if row.games_won - row.games_lost >= 0 else '' }}{{ row.games_won - row.games_lost }} <span class="muted">({{ row.games_won }}:{{ row.games_lost }})</span></td>
+                </tr>
+              {% endfor %}
+            </table>
           </div>
+          <p class="hint" style="margin-top:8px;">🟡 שני המקומות הראשונים עולים לשלב הבא</p>
+        </div>
+        {% for m in data.matches %}
+          {{ match_row(m, 'מחזור ' ~ m.round_number) }}
         {% endfor %}
       </div>
     {% endfor %}
@@ -131,21 +152,7 @@
     {% for stage, stage_matches in knockout_stages %}
       <h2>{{ STAGE_LABELS.get(stage, stage) }}</h2>
       {% for m in stage_matches %}
-        <div class="match-card">
-          <div class="match-pairs">{{ pair_name(pairs_by_id[m.pair_a_id]) }} נגד {{ pair_name(pairs_by_id[m.pair_b_id]) }}</div>
-          {% if m.winner_pair_id %}
-            <div class="match-score">{{ m.score_a }} : {{ m.score_b }}</div>
-          {% elif session.get('is_admin') and tournament.status == 'in_progress' %}
-            <form method="POST" action="{{ url_for('submit_score', mid=m.id) }}" class="score-form">
-              <input type="number" name="score_a" min="0" required>
-              <span>:</span>
-              <input type="number" name="score_b" min="0" required>
-              <button type="submit" class="btn-small">שמור</button>
-            </form>
-          {% else %}
-            <div class="match-score pending">טרם שוחק</div>
-          {% endif %}
-        </div>
+        {{ match_row(m, None) }}
       {% endfor %}
     {% endfor %}
   {% endif %}

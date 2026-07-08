@@ -35,7 +35,7 @@ a { color: inherit; }
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.12);
 }
 
-.auth-card { width: 360px; text-align: center; }
+.auth-card { width: 100%; max-width: 360px; text-align: center; }
 
 .logo { font-size: 28px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
 .logo span { color: var(--gold); }
@@ -45,10 +45,11 @@ label { display: block; text-align: right; font-size: 13px; color: #444; margin-
 
 input, select {
   width: 100%;
+  min-height: 44px;
   padding: 11px 14px;
   border: 1.5px solid var(--border);
   border-radius: 8px;
-  font-size: 15px;
+  font-size: 16px;
   margin-bottom: 14px;
   outline: none;
   font-family: inherit;
@@ -58,6 +59,7 @@ input:focus, select:focus { border-color: var(--navy); }
 
 button, .btn {
   display: inline-block;
+  min-height: 44px;
   padding: 11px 20px;
   background: var(--navy);
   color: #fff;
@@ -88,19 +90,21 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .topbar {
   background: var(--navy);
   color: #fff;
-  padding: 14px 28px;
+  padding: 12px 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
 }
-.topbar .logo { margin: 0; font-size: 20px; }
-.topbar-links { display: flex; gap: 16px; align-items: center; font-size: 14px; }
+.topbar .logo { margin: 0; font-size: 18px; }
+.topbar-links { display: flex; gap: 14px; align-items: center; font-size: 13px; flex-wrap: wrap; }
 .topbar-links a { text-decoration: none; opacity: .9; }
 .topbar-links a:hover { opacity: 1; }
 
-.page { max-width: 960px; margin: 0 auto; padding: 28px 20px; }
-.page h1 { font-size: 22px; margin-bottom: 18px; }
-.page h2 { font-size: 17px; margin: 22px 0 10px; }
+.page { max-width: 960px; margin: 0 auto; padding: 20px 16px 60px; }
+.page h1 { font-size: 20px; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.page h2 { font-size: 16px; margin: 22px 0 10px; }
 
 .tournament-list { display: flex; flex-direction: column; gap: 12px; }
 .tournament-row {
@@ -132,10 +136,49 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .badge-completed { background: #f0fff4; color: var(--green); }
 
 table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; overflow: hidden; }
-th, td { padding: 9px 12px; text-align: right; font-size: 14px; border-bottom: 1px solid var(--border); }
+th, td { padding: 9px 12px; text-align: right; font-size: 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 th { background: var(--bg); font-weight: 700; font-size: 12px; color: #666; }
 tr:last-child td { border-bottom: none; }
-.rank-1 td:first-child, .rank-2 td:first-child { font-weight: 700; color: var(--green); }
+
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 10px; }
+.table-scroll table { border-radius: 0; }
+
+.group-heading {
+  margin-top: 0;
+  font-size: 18px;
+  font-weight: 800;
+  display: inline-block;
+  padding-bottom: 4px;
+  border-bottom: 3px solid var(--gold);
+}
+
+.standings-card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 14px;
+  margin: 10px 0 16px;
+  box-shadow: 0 4px 18px rgba(0,0,0,.07);
+}
+.standings-table th, .standings-table td { padding: 12px 14px; font-size: 15px; }
+.standings-table th { font-size: 12px; }
+.standings-table td.pair-cell { font-weight: 600; white-space: normal; }
+.standings-table tr.rank-1 { background: #fffaf0; }
+.standings-table tr.rank-2 { background: #fdfcf7; }
+
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  font-weight: 800;
+  font-size: 13px;
+  background: var(--bg);
+  color: #888;
+}
+.rank-badge-1 { background: var(--gold); color: var(--navy); }
+.rank-badge-2 { background: #d9dce6; color: var(--navy); }
 
 .match-card {
   background: #fff;
@@ -149,10 +192,24 @@ tr:last-child td { border-bottom: none; }
   flex-wrap: wrap;
 }
 .match-pairs { font-size: 14px; }
+.match-result { display: flex; align-items: center; gap: 10px; }
 .match-score { font-weight: 700; font-size: 15px; }
 .match-score.pending { color: #aaa; font-weight: 400; font-size: 13px; }
 .score-form { display: flex; gap: 6px; align-items: center; }
-.score-form input { width: 52px; margin: 0; padding: 6px 8px; text-align: center; }
+.score-form input { width: 56px; min-height: 40px; margin: 0; padding: 6px 8px; text-align: center; }
+
+.edit-toggle { font-size: 12px; }
+.edit-toggle summary {
+  cursor: pointer;
+  color: #888;
+  list-style: none;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.edit-toggle summary::-webkit-details-marker { display: none; }
+.edit-toggle summary:hover { background: var(--bg); color: var(--navy); }
+.edit-toggle[open] summary { color: var(--navy); font-weight: 600; margin-bottom: 6px; }
+.edit-toggle .score-form { flex-wrap: wrap; }
 
 .winner-banner {
   background: linear-gradient(135deg, var(--gold), #ffd873);
@@ -188,9 +245,35 @@ tr:last-child td { border-bottom: none; }
   display: none;
 }
 .search-results.active { display: block; }
-.search-result-item { padding: 8px 12px; font-size: 13px; cursor: pointer; text-align: right; }
+.search-result-item { padding: 11px 12px; font-size: 14px; cursor: pointer; text-align: right; }
 .search-result-item:hover { background: var(--bg); }
 
 .muted { color: #888; font-size: 13px; }
 .group-block { margin-bottom: 24px; }
 .hint { font-size: 12px; color: #999; margin-top: -8px; margin-bottom: 14px; }
+
+/* ─── Mobile ──────────────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .topbar { padding: 10px 14px; }
+  .topbar .logo a { font-size: 17px; }
+  .topbar-links { font-size: 12px; gap: 10px; }
+
+  .page { padding: 16px 12px 50px; }
+  .page h1 { font-size: 18px; }
+
+  .card { padding: 20px; }
+  .auth-card { padding: 28px 22px; }
+
+  .tournament-row { padding: 14px; flex-wrap: wrap; }
+  .tournament-row .name { font-size: 15px; }
+
+  .standings-table th, .standings-table td { padding: 10px; font-size: 13px; }
+  .standings-table td.pair-cell { font-size: 13px; }
+
+  .match-card { padding: 12px; }
+  .match-pairs { font-size: 13px; width: 100%; }
+  .match-result { width: 100%; justify-content: space-between; }
+
+  .slot-toggle { flex-wrap: wrap; }
+  .slot-toggle button { flex: 1 1 45%; }
+}

@@ -212,32 +212,67 @@ def maybe_run_draw(tournament):
     update_tournament_status(tournament["id"], "full")
 
 
-def advance_if_needed(tournament):
-    """After a score is saved, generate the next stage's matches if the current stage is complete,
-    or mark the tournament completed once the final has a winner."""
+def stage_order_for(tournament):
+    return ["group"] + (["quarterfinal"] if tournament["groups_count"] == 4 else []) + ["semifinal", "final"]
+
+
+def editable_stages(tournament, matches):
+    """A stage's scores stay editable as long as nothing 'real' has been decided downstream
+    of it yet. Once any match in a later stage has a recorded winner, everything upstream of
+    it locks - editing it would silently invalidate a result that already happened."""
+    order = stage_order_for(tournament)
+    editable = set()
+    for i, stage in enumerate(order):
+        stage_matches = [m for m in matches if m["stage"] == stage]
+        if not stage_matches:
+            continue
+        downstream_played = any(
+            m["winner_pair_id"] is not None
+            for later_stage in order[i + 1:]
+            for m in matches if m["stage"] == later_stage
+        )
+        if not downstream_played:
+            editable.add(stage)
+    return editable
+
+
+def delete_matches(match_ids):
+    if not match_ids:
+        return
+    ids = ",".join(match_ids)
+    _supa("DELETE", f"/rest/v1/padel_matches?id=in.({ids})")
+
+
+def recompute_from_stage(tournament, edited_stage):
+    """Called after a score is saved for a match in `edited_stage`. If that stage is now fully
+    complete, (re)generates the next stage's matches from the fresh results - replacing any
+    existing next-stage matches. By the editable_stages() rule this is only ever reached while
+    those next-stage matches are still entirely unplayed, so nothing real is lost."""
     tid = tournament["id"]
     groups_count = tournament["groups_count"]
-    stage_order = ["group"] + (["quarterfinal"] if groups_count == 4 else []) + ["semifinal", "final"]
+    order = stage_order_for(tournament)
+    if edited_stage not in order:
+        return
 
     matches = list_matches(tid)
+
+    if edited_stage == order[-1]:  # editing the final
+        final_matches = [m for m in matches if m["stage"] == "final"]
+        if final_matches and final_matches[0]["winner_pair_id"]:
+            update_tournament_status(tid, "completed", winner_pair_id=final_matches[0]["winner_pair_id"])
+        return
+
     pairs = list_pairs(tid)
-
-    current_stage = None
-    for stage in stage_order:
-        if any(m["stage"] == stage for m in matches):
-            current_stage = stage
-
-    if current_stage is None:
-        return
-
-    stage_matches = sorted(
-        [m for m in matches if m["stage"] == current_stage],
-        key=lambda m: m["match_index"],
-    )
+    stage_matches = sorted([m for m in matches if m["stage"] == edited_stage], key=lambda m: m["match_index"])
     if any(m["winner_pair_id"] is None for m in stage_matches):
-        return
+        return  # stage not complete yet, nothing to (re)generate
 
-    if current_stage == "group":
+    next_stage_name = order[order.index(edited_stage) + 1]
+    existing_next = [m for m in matches if m["stage"] == next_stage_name]
+    if any(m["winner_pair_id"] is not None for m in existing_next):
+        return  # downstream already has a real result - never touch it
+
+    if edited_stage == "group":
         standings_by_group = {}
         for g in range(1, groups_count + 1):
             group_pair_ids = [p["id"] for p in pairs if p["group_number"] == g]
@@ -249,7 +284,10 @@ def advance_if_needed(tournament):
     else:
         winners = [m["winner_pair_id"] for m in stage_matches]
         next_stage, next_matches = engine.generate_next_stage(
-            tournament["pairs_count"], groups_count, current_stage, stage_winner_ids_in_order=winners)
+            tournament["pairs_count"], groups_count, edited_stage, stage_winner_ids_in_order=winners)
+
+    if existing_next:
+        delete_matches([m["id"] for m in existing_next])
 
     if next_stage is None:
         update_tournament_status(tid, "completed", winner_pair_id=stage_matches[0]["winner_pair_id"])
@@ -425,6 +463,7 @@ def tournament_detail(tid):
             knockout_stages.append((stage, stage_matches))
 
     winner_pair = pairs_by_id.get(tournament.get("winner_pair_id"))
+    editable = editable_stages(tournament, matches)
 
     return render_template(
         "tournament_detail.html",
@@ -436,6 +475,7 @@ def tournament_detail(tid):
         groups=groups,
         knockout_stages=knockout_stages,
         winner_pair=winner_pair,
+        editable_stages=editable,
     )
 
 
@@ -523,6 +563,13 @@ def submit_score(mid):
     if not match:
         return redirect(url_for("index"))
     tournament = get_tournament(match["tournament_id"])
+
+    if match["winner_pair_id"] is not None:
+        matches = list_matches(tournament["id"])
+        if match["stage"] not in editable_stages(tournament, matches):
+            flash("אי אפשר לערוך תוצאה זו - השלב הבא כבר שוחק", "error")
+            return redirect(url_for("tournament_detail", tid=tournament["id"]))
+
     try:
         score_a = int(request.form.get("score_a", ""))
         score_b = int(request.form.get("score_b", ""))
@@ -535,7 +582,7 @@ def submit_score(mid):
 
     update_match_score(mid, score_a, score_b, winner)
     tournament = get_tournament(tournament["id"])
-    advance_if_needed(tournament)
+    recompute_from_stage(tournament, match["stage"])
     return redirect(url_for("tournament_detail", tid=tournament["id"]))
 
 
