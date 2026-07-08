@@ -7,12 +7,16 @@
   {% else %}
     <div class="tournament-list">
       {% for t in tournaments %}
-        <a class="tournament-row" href="{{ url_for('tournament_detail', tid=t.id) }}">
-          <div>
-            <div class="name">{{ t.name }}</div>
-            <div class="meta">{{ t.date }} · רמה {{ t.level }} · {{ t.pairs_count }} זוגות · עד {{ t.game_target }}</div>
+        <a class="tournament-row status-{{ t.status }}" href="{{ url_for('tournament_detail', tid=t.id) }}">
+          <div class="tournament-row-top">
+            <span class="name">{{ t.name }}</span>
+            <span class="badge badge-{{ t.status }}">{{ STATUS_LABELS.get(t.status, t.status) }}</span>
           </div>
-          <span class="badge badge-{{ t.status }}">{{ STATUS_LABELS.get(t.status, t.status) }}</span>
+          <div class="meta">📅 {{ t.date }} &nbsp;·&nbsp; רמה {{ t.level }}</div>
+          <div class="registration-progress">
+            <div class="progress-track"><div class="progress-fill" style="width: {{ (t.pairs_registered / t.pairs_count * 100)|round(0, 'floor')|int }}%"></div></div>
+            <span class="progress-label">{{ t.pairs_registered }}/{{ t.pairs_count }} זוגות</span>
+          </div>
         </a>
       {% endfor %}
     </div>

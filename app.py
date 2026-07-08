@@ -662,6 +662,8 @@ def update_password():
 @login_required
 def index():
     tournaments = list_tournaments()
+    for t in tournaments:
+        t["pairs_registered"] = len(list_pairs(t["id"]))
     return render_template("index.html", tournaments=tournaments)
 
 
