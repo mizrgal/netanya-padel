@@ -9,7 +9,7 @@
   {% if m.winner_pair_id %}
     <div class="match-result">
       <div class="match-score">{{ m.score_a }} : {{ m.score_b }}</div>
-      {% if session.get('is_admin') and m.stage in editable_stages %}
+      {% if session.get('is_admin') and (m.stage in editable_stages or (m.stage == 'tiebreak' and 'group' in editable_stages)) %}
         <details class="edit-toggle">
           <summary>ערוך</summary>
           <form method="POST" action="{{ url_for('submit_score', mid=m.id) }}" class="score-form">
