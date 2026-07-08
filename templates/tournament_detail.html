@@ -70,7 +70,15 @@
   <h1>{{ tournament.name }}
     <span class="badge badge-{{ tournament.status }}">{{ STATUS_LABELS.get(tournament.status, tournament.status) }}</span>
   </h1>
-  <p class="muted">{{ tournament.date }} · רמה {{ tournament.level }} · {{ tournament.pairs_count }} זוגות · עד {{ tournament.game_target }} games</p>
+  <p class="muted">{{ tournament.date }} · רמה {{ tournament.level }} · {{ tournament.pairs_count }} זוגות · עד {{ tournament.game_target }} games בשלב הבתים</p>
+
+  {% if session.get('is_admin') %}
+    <form method="POST" action="{{ url_for('delete_tournament_route', tid=tournament.id) }}"
+          style="margin-bottom:16px;"
+          onsubmit="return confirm('למחוק לצמיתות את הטורניר \'{{ tournament.name }}\'? כל הזוגות והמשחקים שלו יימחקו גם הם. אי אפשר לבטל פעולה זו.');">
+      <button type="submit" class="btn-small" style="background:#fff; color:var(--red); border:1.5px solid var(--red);">מחיקת טורניר</button>
+    </form>
+  {% endif %}
 
   {% if tournament.status == 'completed' and winner_pair %}
     <div class="winner-banner">🏆 הזוג המנצח: {{ pair_name(winner_pair) }} 🏆</div>
@@ -123,10 +131,33 @@
       </form>
     {% endif %}
 
+    {% if pending_stage %}
+      {% if session.get('is_admin') %}
+        <div class="card" style="max-width:420px; border:2px solid var(--gold); margin-bottom:20px;">
+          <p style="font-weight:700; margin-bottom:10px;">השלב הנוכחי הסתיים! מוכנים להתקדם ל{{ STAGE_LABELS.get(pending_stage, pending_stage) }}.</p>
+          <form method="POST" action="{{ url_for('advance_stage', tid=tournament.id) }}">
+            <label>עד כמה games ב{{ STAGE_LABELS.get(pending_stage, pending_stage) }}?</label>
+            <select name="game_target" required>
+              <option value="4">עד 4 games</option>
+              <option value="6">עד 6 games</option>
+              <option value="8">עד 8 games</option>
+            </select>
+            <button type="submit" class="btn-block btn-gold">התקדמו ל{{ STAGE_LABELS.get(pending_stage, pending_stage) }}</button>
+          </form>
+        </div>
+      {% else %}
+        <p class="muted" style="margin-bottom:16px;">שלב הבתים הסתיים — ממתינים שהמנהל/ת יבחר/תבחר את אורך המשחקים ב{{ STAGE_LABELS.get(pending_stage, pending_stage) }}.</p>
+      {% endif %}
+    {% endif %}
+
     <h2>שלב הבתים</h2>
     {% for g, data in groups.items() %}
       <div class="group-block">
-        <h2 class="group-heading">בית {{ g }}</h2>
+        <h2 class="group-heading">בית {{ g }}
+          {% if data.matches and data.matches[0].game_target %}
+            <span class="muted" style="font-size:12px; font-weight:400;">(עד {{ data.matches[0].game_target }} games)</span>
+          {% endif %}
+        </h2>
         <div class="standings-card">
           <div class="table-scroll">
             <table class="standings-table">
@@ -143,6 +174,39 @@
           </div>
           <p class="hint" style="margin-top:8px;">🟡 שני המקומות הראשונים עולים לשלב הבא</p>
         </div>
+
+        {% for tie in data.unresolved_ties %}
+          <div class="card" style="border:2px dashed var(--red); margin-bottom:14px;">
+            <p style="font-weight:700; color:var(--red); margin-bottom:10px;">
+              ⚠️ תיקו מוחלט: {% for p in tie %}{{ pair_name(p) }}{% if not loop.last %} = {% endif %}{% endfor %}
+            </p>
+            {% if session.get('is_admin') %}
+              <form method="POST" action="{{ url_for('create_tiebreak', tid=tournament.id, g=g) }}"
+                    style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+                <div style="flex:1; min-width:160px;">
+                  <label>זוג א'</label>
+                  <select name="pair_a_id" required>
+                    {% for p in tie %}<option value="{{ p.id }}">{{ pair_name(p) }}</option>{% endfor %}
+                  </select>
+                </div>
+                <div style="flex:1; min-width:160px;">
+                  <label>זוג ב'</label>
+                  <select name="pair_b_id" required>
+                    {% for p in tie %}<option value="{{ p.id }}">{{ pair_name(p) }}</option>{% endfor %}
+                  </select>
+                </div>
+                <button type="submit" class="btn-small btn-gold" style="margin-bottom:14px;">צור משחק טיי-ברייק</button>
+              </form>
+            {% else %}
+              <p class="muted">ממתינים שהמנהל/ת ייצור/תיצור משחק טיי-ברייק כדי לקבוע את הסדר.</p>
+            {% endif %}
+          </div>
+        {% endfor %}
+
+        {% for m in data.tiebreak_matches %}
+          {{ match_row(m, 'טיי-ברייק') }}
+        {% endfor %}
+
         {% for m in data.matches %}
           {{ match_row(m, 'מחזור ' ~ m.round_number) }}
         {% endfor %}
@@ -150,7 +214,11 @@
     {% endfor %}
 
     {% for stage, stage_matches in knockout_stages %}
-      <h2>{{ STAGE_LABELS.get(stage, stage) }}</h2>
+      <h2>{{ STAGE_LABELS.get(stage, stage) }}
+        {% if stage_matches and stage_matches[0].game_target %}
+          <span class="muted" style="font-size:12px; font-weight:400;">(עד {{ stage_matches[0].game_target }} games)</span>
+        {% endif %}
+      </h2>
       {% for m in stage_matches %}
         {{ match_row(m, None) }}
       {% endfor %}

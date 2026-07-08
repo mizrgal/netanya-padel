@@ -1,5 +1,6 @@
 """Pure tournament bracket logic - no Flask, no DB. Testable in isolation."""
 
+import functools
 import random
 
 GROUP_ROUND_ORDER = [(0, 1), (2, 3), (0, 2), (1, 3), (0, 3), (1, 2)]
@@ -51,13 +52,17 @@ def run_draw(pair_ids):
     return group_assignments, matches
 
 
-def compute_group_standings(pair_ids, group_matches):
+def compute_group_standings(pair_ids, group_matches, tiebreak_winners=None):
     """pair_ids: pairs in one group. group_matches: completed matches for that group
     (each with pair_a_id, pair_b_id, score_a, score_b, winner_pair_id).
+    tiebreak_winners: optional {frozenset({pair_a, pair_b}): winner_pair_id} for any manual
+    tie-break matches played between two pairs that are statistically tied.
 
-    Returns list of pair_ids ranked best-first: wins desc, game_diff desc, games_won desc.
-    Ties beyond that keep the input order (deterministic, not manually resolved).
+    Returns list of pair_ids ranked best-first: wins desc, game_diff desc, games_won desc,
+    with an exact statistical tie between two pairs broken by tiebreak_winners if present.
+    Ties with no recorded tie-break keep stable input order.
     """
+    tiebreak_winners = tiebreak_winners or {}
     stats = {pid: {"wins": 0, "games_won": 0, "games_lost": 0} for pid in pair_ids}
     for m in group_matches:
         if m.get("winner_pair_id") is None:
@@ -75,13 +80,36 @@ def compute_group_standings(pair_ids, group_matches):
             if m["winner_pair_id"] == b:
                 stats[b]["wins"] += 1
 
-    def sort_key(pid):
+    def stat_key(pid):
         s = stats[pid]
         diff = s["games_won"] - s["games_lost"]
         return (-s["wins"], -diff, -s["games_won"])
 
-    ranked = sorted(pair_ids, key=sort_key)
+    def compare(a, b):
+        ka, kb = stat_key(a), stat_key(b)
+        if ka != kb:
+            return -1 if ka < kb else 1
+        winner = tiebreak_winners.get(frozenset((a, b)))
+        if winner == a:
+            return -1
+        if winner == b:
+            return 1
+        return 0
+
+    ranked = sorted(pair_ids, key=functools.cmp_to_key(compare))
     return ranked, stats
+
+
+def find_stat_ties(pair_ids, stats):
+    """Groups of 2+ pair_ids that are exactly tied on (wins, game_diff, games_won) -
+    candidates for a manual tie-break match."""
+    buckets = {}
+    for pid in pair_ids:
+        s = stats[pid]
+        diff = s["games_won"] - s["games_lost"]
+        key = (s["wins"], diff, s["games_won"])
+        buckets.setdefault(key, []).append(pid)
+    return [pids for pids in buckets.values() if len(pids) >= 2]
 
 
 def group_qualifiers(groups_count, standings_by_group):

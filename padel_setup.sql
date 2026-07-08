@@ -16,7 +16,7 @@ create table if not exists padel_tournaments (
   level text not null,
   pairs_count int not null check (pairs_count in (8, 16)),
   groups_count int not null,
-  game_target int not null check (game_target in (4, 6)),
+  game_target int not null check (game_target in (4, 6, 8)),
   status text not null default 'open', -- open -> full -> in_progress -> completed
   winner_pair_id uuid,
   created_by uuid references padel_users(id),
@@ -43,10 +43,11 @@ create table if not exists padel_pairs (
 create table if not exists padel_matches (
   id uuid primary key default gen_random_uuid(),
   tournament_id uuid not null references padel_tournaments(id),
-  stage text not null, -- group | quarterfinal | semifinal | final
+  stage text not null, -- group | tiebreak | quarterfinal | semifinal | final
   group_number int,
   round_number int,
   match_index int not null default 0,
+  game_target int check (game_target in (4, 6, 8)),
   pair_a_id uuid references padel_pairs(id),
   pair_b_id uuid references padel_pairs(id),
   score_a int,

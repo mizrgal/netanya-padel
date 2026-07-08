@@ -148,6 +148,13 @@ def update_tournament_status(tid, status, winner_pair_id=None):
     db_patch("padel_tournaments", f"id=eq.{tid}", updates)
 
 
+def delete_pairs(pair_ids):
+    if not pair_ids:
+        return
+    ids = ",".join(pair_ids)
+    _supa("DELETE", f"/rest/v1/padel_pairs?id=in.({ids})")
+
+
 def list_pairs(tid):
     return db_get(f"/rest/v1/padel_pairs?tournament_id=eq.{quote(tid)}&select=*&order=created_at.asc")
 
@@ -225,7 +232,10 @@ def maybe_run_draw(tournament):
     assignments, matches = engine.run_draw(pair_ids)
     for pid, group_number in assignments.items():
         update_pair_group(pid, group_number)
-    create_matches([{**m, "tournament_id": tournament["id"]} for m in matches])
+    create_matches([
+        {**m, "tournament_id": tournament["id"], "game_target": tournament["game_target"]}
+        for m in matches
+    ])
     update_tournament_status(tournament["id"], "full")
 
 
@@ -260,13 +270,105 @@ def delete_matches(match_ids):
     _supa("DELETE", f"/rest/v1/padel_matches?id=in.({ids})")
 
 
+def delete_tournament(tid):
+    """Cascade delete: clear the tournament's winner_pair_id (it FKs into padel_pairs, so it
+    has to go before the pairs do), then matches, then pairs, then the tournament row itself."""
+    db_patch("padel_tournaments", f"id=eq.{tid}", {"winner_pair_id": None})
+    delete_matches([m["id"] for m in list_matches(tid)])
+    delete_pairs([p["id"] for p in list_pairs(tid)])
+    _supa("DELETE", f"/rest/v1/padel_tournaments?id=eq.{tid}")
+
+
+def _latest_complete_stage(tournament, matches):
+    """The furthest stage that has matches AND all of them have a recorded winner.
+    Returns None if no stage is fully complete yet, or if that stage is already the final
+    (nothing left to advance to)."""
+    order = stage_order_for(tournament)
+    current_stage = None
+    for stage in order:
+        if any(m["stage"] == stage for m in matches):
+            current_stage = stage
+    if current_stage is None or current_stage == order[-1]:
+        return None
+    stage_matches = [m for m in matches if m["stage"] == current_stage]
+    if any(m["winner_pair_id"] is None for m in stage_matches):
+        return None
+    return current_stage
+
+
+def stage_pending_advance(tournament, matches):
+    """The name of the next stage if the current stage just finished but the admin hasn't
+    picked a game target and advanced yet - i.e. the UI should prompt for one. None otherwise."""
+    order = stage_order_for(tournament)
+    complete_stage = _latest_complete_stage(tournament, matches)
+    if complete_stage is None:
+        return None
+    next_stage_name = order[order.index(complete_stage) + 1]
+    if any(m["stage"] == next_stage_name for m in matches):
+        return None  # already advanced
+    return next_stage_name
+
+
+def _tiebreak_winners_by_group(tid):
+    """{group_number: {frozenset({pair_a, pair_b}): winner_pair_id}} from completed tiebreak matches."""
+    by_group = {}
+    for m in list_matches(tid):
+        if m["stage"] != "tiebreak" or m["winner_pair_id"] is None:
+            continue
+        by_group.setdefault(m["group_number"], {})[frozenset((m["pair_a_id"], m["pair_b_id"]))] = m["winner_pair_id"]
+    return by_group
+
+
+def _next_stage_matches(tournament, from_stage, stage_matches, pairs):
+    """Pure computation of what the next stage's matches should be, given `from_stage` is
+    fully complete. Returns (next_stage_name_or_None, [match dicts without game_target/tournament_id])."""
+    groups_count = tournament["groups_count"]
+    if from_stage == "group":
+        tiebreaks_by_group = _tiebreak_winners_by_group(tournament["id"])
+        standings_by_group = {}
+        for g in range(1, groups_count + 1):
+            group_pair_ids = [p["id"] for p in pairs if p["group_number"] == g]
+            group_matches = [m for m in stage_matches if m["group_number"] == g]
+            ranked_ids, _ = engine.compute_group_standings(
+                group_pair_ids, group_matches, tiebreaks_by_group.get(g))
+            standings_by_group[g] = ranked_ids
+        return engine.generate_next_stage(
+            tournament["pairs_count"], groups_count, "group", standings_by_group=standings_by_group)
+    winners = [m["winner_pair_id"] for m in stage_matches]
+    return engine.generate_next_stage(
+        tournament["pairs_count"], groups_count, from_stage, stage_winner_ids_in_order=winners)
+
+
+def advance_to_next_stage(tournament, game_target):
+    """Admin-triggered: the current stage just finished and nothing has been generated for
+    the next one yet. Creates the next stage's matches with the chosen game_target."""
+    tid = tournament["id"]
+    matches = list_matches(tid)
+    from_stage = _latest_complete_stage(tournament, matches)
+    if from_stage is None:
+        return
+    order = stage_order_for(tournament)
+    next_stage_name = order[order.index(from_stage) + 1]
+    if any(m["stage"] == next_stage_name for m in matches):
+        return  # already advanced - never overwrite
+
+    pairs = list_pairs(tid)
+    stage_matches = sorted([m for m in matches if m["stage"] == from_stage], key=lambda m: m["match_index"])
+    next_stage, next_matches = _next_stage_matches(tournament, from_stage, stage_matches, pairs)
+    if next_stage is None:
+        return
+    rows = [{**m, "tournament_id": tid, "stage": next_stage, "game_target": game_target} for m in next_matches]
+    create_matches(rows)
+
+
 def recompute_from_stage(tournament, edited_stage):
     """Called after a score is saved for a match in `edited_stage`. If that stage is now fully
-    complete, (re)generates the next stage's matches from the fresh results - replacing any
-    existing next-stage matches. By the editable_stages() rule this is only ever reached while
-    those next-stage matches are still entirely unplayed, so nothing real is lost."""
+    complete AND the admin already advanced past it (the next stage's matches exist), regenerates
+    those next-stage matches from the fresh results - keeping the game_target already chosen for
+    them. If the admin hasn't advanced yet, does nothing (that's a manual action, see
+    advance_to_next_stage). By the editable_stages() rule this is only ever reached while the
+    next-stage matches are still entirely unplayed, so nothing real is lost."""
     tid = tournament["id"]
-    groups_count = tournament["groups_count"]
     order = stage_order_for(tournament)
     if edited_stage not in order:
         return
@@ -286,31 +388,20 @@ def recompute_from_stage(tournament, edited_stage):
 
     next_stage_name = order[order.index(edited_stage) + 1]
     existing_next = [m for m in matches if m["stage"] == next_stage_name]
+    if not existing_next:
+        return  # admin hasn't advanced to this stage yet - leave it for advance_to_next_stage
     if any(m["winner_pair_id"] is not None for m in existing_next):
         return  # downstream already has a real result - never touch it
 
-    if edited_stage == "group":
-        standings_by_group = {}
-        for g in range(1, groups_count + 1):
-            group_pair_ids = [p["id"] for p in pairs if p["group_number"] == g]
-            group_matches = [m for m in stage_matches if m["group_number"] == g]
-            ranked_ids, _ = engine.compute_group_standings(group_pair_ids, group_matches)
-            standings_by_group[g] = ranked_ids
-        next_stage, next_matches = engine.generate_next_stage(
-            tournament["pairs_count"], groups_count, "group", standings_by_group=standings_by_group)
-    else:
-        winners = [m["winner_pair_id"] for m in stage_matches]
-        next_stage, next_matches = engine.generate_next_stage(
-            tournament["pairs_count"], groups_count, edited_stage, stage_winner_ids_in_order=winners)
-
-    if existing_next:
-        delete_matches([m["id"] for m in existing_next])
+    game_target = existing_next[0]["game_target"]
+    next_stage, next_matches = _next_stage_matches(tournament, edited_stage, stage_matches, pairs)
+    delete_matches([m["id"] for m in existing_next])
 
     if next_stage is None:
         update_tournament_status(tid, "completed", winner_pair_id=stage_matches[0]["winner_pair_id"])
         return
 
-    rows = [{**m, "tournament_id": tid, "stage": next_stage} for m in next_matches]
+    rows = [{**m, "tournament_id": tid, "stage": next_stage, "game_target": game_target} for m in next_matches]
     create_matches(rows)
 
 
@@ -508,12 +599,23 @@ def tournament_new():
             flash("נא למלא את כל השדות", "error")
         elif pairs_count not in ("8", "16"):
             flash("יש לבחור כמות זוגות תקינה", "error")
-        elif game_target not in ("4", "6"):
+        elif game_target not in ("4", "6", "8"):
             flash("יש לבחור משך משחק תקין", "error")
         else:
             t = create_tournament(name, date, level, int(pairs_count), int(game_target), session["user_id"])
             return redirect(url_for("tournament_detail", tid=t["id"]))
     return render_template("tournament_new.html")
+
+
+@app.route("/tournaments/<tid>/delete", methods=["POST"])
+@admin_required
+def delete_tournament_route(tid):
+    tournament = get_tournament(tid)
+    if not tournament:
+        return redirect(url_for("index"))
+    delete_tournament(tid)
+    flash(f"הטורניר '{tournament['name']}' נמחק", "success")
+    return redirect(url_for("index"))
 
 
 @app.route("/admin/users/new", methods=["GET", "POST"])
@@ -607,15 +709,37 @@ def tournament_detail(tid):
     if tournament["status"] in ("full", "in_progress", "completed"):
         for g in range(1, tournament["groups_count"] + 1):
             group_pairs = [p for p in pairs if p["group_number"] == g]
+            group_pair_ids = [p["id"] for p in group_pairs]
             group_matches = sorted(
                 [m for m in matches if m["stage"] == "group" and m["group_number"] == g],
                 key=lambda m: m["match_index"],
             )
             completed = [m for m in group_matches if m["winner_pair_id"]]
-            ranked_ids, stats = engine.compute_group_standings([p["id"] for p in group_pairs], completed)
+            tiebreak_matches = sorted(
+                [m for m in matches if m["stage"] == "tiebreak" and m["group_number"] == g],
+                key=lambda m: m["match_index"],
+            )
+            tiebreak_winners = {
+                frozenset((m["pair_a_id"], m["pair_b_id"])): m["winner_pair_id"]
+                for m in tiebreak_matches if m["winner_pair_id"]
+            }
+            ranked_ids, stats = engine.compute_group_standings(group_pair_ids, completed, tiebreak_winners)
+
+            unresolved_ties = []
+            if len(completed) == len(group_matches) and group_matches:
+                for bucket in engine.find_stat_ties(group_pair_ids, stats):
+                    resolved = any(
+                        frozenset((a, b)) in tiebreak_winners
+                        for a in bucket for b in bucket if a != b
+                    )
+                    if not resolved:
+                        unresolved_ties.append([pairs_by_id[pid] for pid in bucket])
+
             groups[g] = {
                 "matches": group_matches,
+                "tiebreak_matches": tiebreak_matches,
                 "standings": [{"pair": pairs_by_id[pid], **stats[pid]} for pid in ranked_ids],
+                "unresolved_ties": unresolved_ties,
             }
 
     knockout_stages = []
@@ -626,6 +750,7 @@ def tournament_detail(tid):
 
     winner_pair = pairs_by_id.get(tournament.get("winner_pair_id"))
     editable = editable_stages(tournament, matches)
+    pending_stage = stage_pending_advance(tournament, matches)
 
     return render_template(
         "tournament_detail.html",
@@ -638,6 +763,7 @@ def tournament_detail(tid):
         knockout_stages=knockout_stages,
         winner_pair=winner_pair,
         editable_stages=editable,
+        pending_stage=pending_stage,
     )
 
 
@@ -718,6 +844,51 @@ def start_tournament(tid):
     return redirect(url_for("tournament_detail", tid=tid))
 
 
+@app.route("/tournaments/<tid>/advance-stage", methods=["POST"])
+@admin_required
+def advance_stage(tid):
+    tournament = get_tournament(tid)
+    if not tournament:
+        return redirect(url_for("index"))
+    game_target = request.form.get("game_target", "")
+    if game_target not in ("4", "6", "8"):
+        flash("יש לבחור עד כמה games תקין", "error")
+        return redirect(url_for("tournament_detail", tid=tid))
+    matches = list_matches(tid)
+    if stage_pending_advance(tournament, matches) is None:
+        flash("אין שלב הממתין להתקדמות כרגע", "error")
+        return redirect(url_for("tournament_detail", tid=tid))
+    advance_to_next_stage(tournament, int(game_target))
+    flash("השלב הבא נוצר!", "success")
+    return redirect(url_for("tournament_detail", tid=tid))
+
+
+@app.route("/tournaments/<tid>/groups/<int:g>/tiebreak", methods=["POST"])
+@admin_required
+def create_tiebreak(tid, g):
+    tournament = get_tournament(tid)
+    if not tournament:
+        return redirect(url_for("index"))
+    pair_a_id = request.form.get("pair_a_id", "")
+    pair_b_id = request.form.get("pair_b_id", "")
+    if not pair_a_id or not pair_b_id or pair_a_id == pair_b_id:
+        flash("יש לבחור שני זוגות שונים", "error")
+        return redirect(url_for("tournament_detail", tid=tid))
+
+    matches = list_matches(tid)
+    group_matches = [m for m in matches if m["stage"] == "group" and m["group_number"] == g]
+    game_target = group_matches[0]["game_target"] if group_matches else tournament["game_target"]
+    existing_tiebreaks = [m for m in matches if m["stage"] == "tiebreak" and m["group_number"] == g]
+
+    create_matches([{
+        "tournament_id": tid, "stage": "tiebreak", "group_number": g,
+        "match_index": len(existing_tiebreaks),
+        "pair_a_id": pair_a_id, "pair_b_id": pair_b_id, "game_target": game_target,
+    }])
+    flash("משחק טיי-ברייק נוצר — הזן/י את התוצאה כשהוא מסתיים", "success")
+    return redirect(url_for("tournament_detail", tid=tid))
+
+
 @app.route("/matches/<mid>/score", methods=["POST"])
 @admin_required
 def submit_score(mid):
@@ -728,7 +899,9 @@ def submit_score(mid):
 
     if match["winner_pair_id"] is not None:
         matches = list_matches(tournament["id"])
-        if match["stage"] not in editable_stages(tournament, matches):
+        editable = editable_stages(tournament, matches)
+        is_editable = match["stage"] in editable or (match["stage"] == "tiebreak" and "group" in editable)
+        if not is_editable:
             flash("אי אפשר לערוך תוצאה זו - השלב הבא כבר שוחק", "error")
             return redirect(url_for("tournament_detail", tid=tournament["id"]))
 
@@ -744,7 +917,9 @@ def submit_score(mid):
 
     update_match_score(mid, score_a, score_b, winner)
     tournament = get_tournament(tournament["id"])
-    recompute_from_stage(tournament, match["stage"])
+    # a tiebreak match's result only matters as an input to the group standings
+    recompute_stage = "group" if match["stage"] == "tiebreak" else match["stage"]
+    recompute_from_stage(tournament, recompute_stage)
     return redirect(url_for("tournament_detail", tid=tournament["id"]))
 
 
