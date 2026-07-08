@@ -277,6 +277,24 @@ tr:last-child td { border-bottom: none; }
 .group-block { margin-bottom: 24px; }
 .hint { font-size: 12px; color: #999; margin-top: -8px; margin-bottom: 14px; }
 
+.tie-alert {
+  background: #fff5f5;
+  border: 1px solid #f3c6c6;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--red);
+}
+.tie-alert-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.tie-alert-actions form { margin: 0; }
+.tie-alert-actions .btn-small { padding: 5px 10px; }
+
 /* ─── Mobile ──────────────────────────────────────────────────────────── */
 @media (max-width: 600px) {
   .topbar { padding: 10px 14px; }

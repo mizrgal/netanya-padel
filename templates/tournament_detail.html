@@ -162,29 +162,30 @@
         </div>
 
         {% for tie in data.unresolved_ties %}
-          <div class="card" style="border:2px dashed var(--red); margin-bottom:14px;">
-            <p style="font-weight:700; color:var(--red); margin-bottom:10px;">
-              ⚠️ תיקו מוחלט: {% for p in tie %}{{ pair_name(p) }}{% if not loop.last %} = {% endif %}{% endfor %}
-            </p>
+          <div class="tie-alert">
+            <span>⚠️ תיקו: {% for p in tie %}{{ pair_name(p) }}{% if not loop.last %} = {% endif %}{% endfor %}</span>
             {% if session.get('is_admin') %}
-              <form method="POST" action="{{ url_for('create_tiebreak', tid=tournament.id, g=g) }}"
-                    style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
-                <div style="flex:1; min-width:160px;">
-                  <label>זוג א'</label>
-                  <select name="pair_a_id" required>
-                    {% for p in tie %}<option value="{{ p.id }}">{{ pair_name(p) }}</option>{% endfor %}
-                  </select>
-                </div>
-                <div style="flex:1; min-width:160px;">
-                  <label>זוג ב'</label>
-                  <select name="pair_b_id" required>
-                    {% for p in tie %}<option value="{{ p.id }}">{{ pair_name(p) }}</option>{% endfor %}
-                  </select>
-                </div>
-                <button type="submit" class="btn-small btn-gold" style="margin-bottom:14px;">צור משחק טיי-ברייק</button>
-              </form>
+              <div class="tie-alert-actions">
+                {% if tie|length == 2 %}
+                  <form method="POST" action="{{ url_for('create_tiebreak', tid=tournament.id, g=g) }}">
+                    <input type="hidden" name="pair_a_id" value="{{ tie[0].id }}">
+                    <input type="hidden" name="pair_b_id" value="{{ tie[1].id }}">
+                    <button type="submit" class="btn btn-small btn-gold">צור טיי-ברייק</button>
+                  </form>
+                {% else %}
+                  {% for a in tie %}
+                    {% for b in tie[loop.index:] %}
+                      <form method="POST" action="{{ url_for('create_tiebreak', tid=tournament.id, g=g) }}">
+                        <input type="hidden" name="pair_a_id" value="{{ a.id }}">
+                        <input type="hidden" name="pair_b_id" value="{{ b.id }}">
+                        <button type="submit" class="btn btn-small btn-outline">{{ pair_name(a) }} נגד {{ pair_name(b) }}</button>
+                      </form>
+                    {% endfor %}
+                  {% endfor %}
+                {% endif %}
+              </div>
             {% else %}
-              <p class="muted">ממתינים שהמנהל/ת ייצור/תיצור משחק טיי-ברייק כדי לקבוע את הסדר.</p>
+              <span class="muted">ממתינים למנהל/ת</span>
             {% endif %}
           </div>
         {% endfor %}
