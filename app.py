@@ -22,6 +22,7 @@ app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 
 SUPABASE_URL   = os.environ.get("SUPABASE_URL", "")
 SERVICE_KEY    = os.environ.get("SUPABASE_SERVICE_KEY", "")
+ANON_KEY       = os.environ.get("SUPABASE_ANON_KEY", "")
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "")
 
 STAGE_LABELS = {
@@ -87,6 +88,32 @@ def db_patch(table, filter_qs, updates):
     return _supa("PATCH", f"/rest/v1/{table}?{filter_qs}", updates)
 
 
+# ─── Phone verification (Supabase Auth SMS OTP) ────────────────────────────
+def normalize_phone(phone):
+    digits = "".join(c for c in phone if c.isdigit())
+    if digits.startswith("972"):
+        return "+" + digits
+    if digits.startswith("0"):
+        return "+972" + digits[1:]
+    return "+" + digits
+
+
+def send_phone_otp(phone):
+    if not ANON_KEY or not SUPABASE_URL:
+        raise RuntimeError("SUPABASE_ANON_KEY / SUPABASE_URL not configured")
+    _request("POST", f"{SUPABASE_URL}/auth/v1/otp",
+              {"phone": phone, "channel": "sms"},
+              {"apikey": ANON_KEY, "Content-Type": "application/json"})
+
+
+def verify_phone_otp(phone, token):
+    if not ANON_KEY or not SUPABASE_URL:
+        raise RuntimeError("SUPABASE_ANON_KEY / SUPABASE_URL not configured")
+    _request("POST", f"{SUPABASE_URL}/auth/v1/verify",
+              {"type": "sms", "phone": phone, "token": token},
+              {"apikey": ANON_KEY, "Content-Type": "application/json"})
+
+
 # ─── Data access ────────────────────────────────────────────────────────────
 def get_user_by_id(user_id):
     rows = db_get(f"/rest/v1/padel_users?id=eq.{quote(user_id)}&select=*")
@@ -128,10 +155,14 @@ def search_users(q, exclude_ids=()):
 
 
 def create_user(username, phone, password, is_admin=False):
+    return create_user_with_hash(username, phone, generate_password_hash(password), is_admin)
+
+
+def create_user_with_hash(username, phone, password_hash, is_admin=False):
     return db_insert("padel_users", {
         "username": username,
         "phone": phone,
-        "password_hash": generate_password_hash(password),
+        "password_hash": password_hash,
         "is_admin": is_admin,
     })
 
@@ -551,13 +582,55 @@ def register():
         elif get_user_by_username(username):
             flash("שם המשתמש כבר תפוס, בחר/י שם אחר", "error")
         else:
-            is_admin = bool(ADMIN_USERNAME) and username == ADMIN_USERNAME
-            user = create_user(username, phone, password, is_admin=is_admin)
-            session["user_id"] = user["id"]
-            session["username"] = user["username"]
-            session["is_admin"] = user["is_admin"]
-            return redirect(url_for("index"))
+            normalized_phone = normalize_phone(phone)
+            try:
+                send_phone_otp(normalized_phone)
+            except Exception:
+                flash("שליחת קוד האימות למספר הזה נכשלה — בדוק/י את הטלפון ונסה/י שוב", "error")
+                return render_template("register.html")
+            # password is hashed up front so the raw password never sits in the session cookie
+            session["pending_registration"] = {
+                "username": username, "phone": phone, "normalized_phone": normalized_phone,
+                "password_hash": generate_password_hash(password),
+            }
+            return redirect(url_for("register_verify"))
     return render_template("register.html")
+
+
+@app.route("/register/verify", methods=["GET", "POST"])
+def register_verify():
+    if session.get("user_id"):
+        return redirect(url_for("index"))
+    pending = session.get("pending_registration")
+    if not pending:
+        return redirect(url_for("register"))
+
+    if request.method == "POST":
+        if request.form.get("action") == "resend":
+            try:
+                send_phone_otp(pending["normalized_phone"])
+                flash("קוד חדש נשלח", "success")
+            except Exception:
+                flash("שליחת הקוד נכשלה, נסה/י שוב", "error")
+            return render_template("register_verify.html", phone=pending["phone"])
+
+        code = request.form.get("code", "").strip()
+        try:
+            verify_phone_otp(pending["normalized_phone"], code)
+        except Exception:
+            flash("קוד שגוי או שפג תוקפו", "error")
+            return render_template("register_verify.html", phone=pending["phone"])
+
+        is_admin = bool(ADMIN_USERNAME) and pending["username"] == ADMIN_USERNAME
+        user = create_user_with_hash(pending["username"], pending["phone"], pending["password_hash"], is_admin=is_admin)
+        session.pop("pending_registration", None)
+        session["user_id"] = user["id"]
+        session["username"] = user["username"]
+        session["is_admin"] = user["is_admin"]
+        flash("הטלפון אומת בהצלחה!", "success")
+        return redirect(url_for("index"))
+
+    return render_template("register_verify.html", phone=pending["phone"])
 
 
 @app.route("/login", methods=["GET", "POST"])

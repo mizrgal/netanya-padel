@@ -1,12 +1,15 @@
 {% extends "base_app.html" %}
 {% block title %}ניהול משתמשים – Netanya Padel{% endblock %}
 {% block content %}
-  <h1>ניהול משתמשים ({{ users|length }})</h1>
+  <h1>ניהול משתמשים (<span id="user-count">{{ users|length }}</span>)</h1>
+
+  <input type="text" id="user-search" placeholder="חיפוש לפי שם משתמש או טלפון..." autocomplete="off">
+
   <div class="table-scroll">
-    <table>
+    <table id="users-table">
       <tr><th>שם משתמש</th><th>טלפון</th><th>הרשאה</th><th>נרשם ב-</th><th></th></tr>
       {% for u in users %}
-        <tr>
+        <tr data-search="{{ (u.username ~ ' ' ~ u.phone)|lower }}">
           <td>{{ u.username }}</td>
           <td>{{ u.phone }}</td>
           <td>
@@ -19,4 +22,22 @@
       {% endfor %}
     </table>
   </div>
+
+  <script>
+    (function () {
+      var input = document.getElementById('user-search');
+      var rows = Array.prototype.slice.call(document.querySelectorAll('#users-table tr[data-search]'));
+      var counter = document.getElementById('user-count');
+      input.addEventListener('input', function () {
+        var q = input.value.trim().toLowerCase();
+        var visible = 0;
+        rows.forEach(function (row) {
+          var match = row.dataset.search.indexOf(q) !== -1;
+          row.style.display = match ? '' : 'none';
+          if (match) visible++;
+        });
+        counter.textContent = visible;
+      });
+    })();
+  </script>
 {% endblock %}
