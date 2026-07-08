@@ -190,3 +190,25 @@ def score_winner(pair_a_id, pair_b_id, score_a, score_b):
     if score_a == score_b:
         raise ValueError("no ties allowed - scores must differ")
     return pair_a_id if score_a > score_b else pair_b_id
+
+
+def resolve_matchup(pair_a_id, pair_b_id, matchup_matches):
+    """A knockout-stage matchup can be decided by 1 or 2 games (round_number 1/2), with an
+    optional decisive 3rd game (round_number 3) if the first two split 1-1. Returns the
+    winning pair_id, or None if not yet resolved (still waiting on a game, or on a decider
+    after a 1-1 split).
+    """
+    wins = {pair_a_id: 0, pair_b_id: 0}
+    decider = None
+    for m in matchup_matches:
+        if m.get("round_number") == 3:
+            decider = m
+            continue
+        if m.get("winner_pair_id") is None:
+            return None
+        wins[m["winner_pair_id"]] += 1
+    if wins[pair_a_id] != wins[pair_b_id]:
+        return pair_a_id if wins[pair_a_id] > wins[pair_b_id] else pair_b_id
+    if decider is not None and decider.get("winner_pair_id"):
+        return decider["winner_pair_id"]
+    return None

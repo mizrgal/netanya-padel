@@ -122,7 +122,12 @@
         <div class="card" style="max-width:420px; border:2px solid var(--gold); margin-bottom:20px;">
           <p style="font-weight:700; margin-bottom:10px;">השלב הנוכחי הסתיים! מוכנים להתקדם ל{{ STAGE_LABELS.get(pending_stage, pending_stage) }}.</p>
           <form method="POST" action="{{ url_for('advance_stage', tid=tournament.id) }}">
-            <label>עד כמה games ב{{ STAGE_LABELS.get(pending_stage, pending_stage) }}?</label>
+            <label>כמה משחקים לכל זוגיה ב{{ STAGE_LABELS.get(pending_stage, pending_stage) }}?</label>
+            <select name="games_per_matchup" required>
+              <option value="1">משחק אחד</option>
+              <option value="2">שני משחקים (טיי-ברייק אם 1-1)</option>
+            </select>
+            <label>עד כמה games בכל משחק?</label>
             <select name="game_target" required>
               <option value="4">עד 4 games</option>
               <option value="6">עד 6 games</option>
@@ -200,14 +205,32 @@
       </div>
     {% endfor %}
 
-    {% for stage, stage_matches in knockout_stages %}
+    {% for stage, matchups in knockout_stages %}
       <h2>{{ STAGE_LABELS.get(stage, stage) }}
-        {% if stage_matches and stage_matches[0].game_target %}
-          <span class="muted" style="font-size:12px; font-weight:400;">(עד {{ stage_matches[0].game_target }} games)</span>
+        {% if matchups and matchups[0].legs and matchups[0].legs[0].game_target %}
+          <span class="muted" style="font-size:12px; font-weight:400;">(עד {{ matchups[0].legs[0].game_target }} games)</span>
         {% endif %}
       </h2>
-      {% for m in stage_matches %}
-        {{ match_row(m, None) }}
+      {% for mu in matchups %}
+        {% for leg in mu.legs %}
+          {{ match_row(leg, 'משחק ' ~ leg.round_number if mu.legs|length > 1 else None) }}
+        {% endfor %}
+        {% if mu.decider %}
+          {{ match_row(mu.decider, 'משחק מכריע') }}
+        {% elif mu.needs_decider %}
+          <div class="tie-alert">
+            <span>⚠️ תיקו 1-1 בין {{ pair_name(mu.pair_a) }} ל{{ pair_name(mu.pair_b) }}</span>
+            {% if session.get('is_admin') %}
+              <div class="tie-alert-actions">
+                <form method="POST" action="{{ url_for('create_matchup_decider', tid=tournament.id, stage=stage, match_index=mu.match_index) }}">
+                  <button type="submit" class="btn btn-small btn-gold">צור משחק מכריע</button>
+                </form>
+              </div>
+            {% else %}
+              <span class="muted">ממתינים למנהל/ת</span>
+            {% endif %}
+          </div>
+        {% endif %}
       {% endfor %}
     {% endfor %}
   {% endif %}

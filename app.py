@@ -300,10 +300,48 @@ def delete_tournament(tid):
     _supa("DELETE", f"/rest/v1/padel_tournaments?id=eq.{tid}")
 
 
+def _matchups_by_index(stage_matches):
+    """Group a knockout stage's match rows by match_index (their pairing slot) - each
+    pairing can have 1 or 2 "legs" (round_number 1/2) plus an optional decider (round_number 3)."""
+    grouped = {}
+    for m in stage_matches:
+        grouped.setdefault(m["match_index"], []).append(m)
+    return grouped
+
+
+def _matchup_winner(matchup_rows):
+    a, b = matchup_rows[0]["pair_a_id"], matchup_rows[0]["pair_b_id"]
+    return engine.resolve_matchup(a, b, matchup_rows)
+
+
+def _stage_is_resolved(stage, stage_matches):
+    if not stage_matches:
+        return False
+    if stage == "group":
+        return all(m["winner_pair_id"] is not None for m in stage_matches)
+    return all(_matchup_winner(rows) is not None for rows in _matchups_by_index(stage_matches).values())
+
+
+def _stage_winners_in_order(stage_matches):
+    """Knockout-stage winners in match_index order - one per pairing, however many legs it took."""
+    matchups = _matchups_by_index(stage_matches)
+    return [_matchup_winner(matchups[idx]) for idx in sorted(matchups.keys())]
+
+
+def _infer_games_per_matchup(stage_matches):
+    """How many legs (1 or 2) the first pairing (match_index 0) was created with, inferred
+    from its rows (excluding a decider, round_number 3) - used to preserve the admin's
+    original choice when regenerating a stage after an upstream edit."""
+    if not stage_matches:
+        return 1
+    legs = [m for m in stage_matches if m["match_index"] == 0 and m["round_number"] != 3]
+    return len(legs) or 1
+
+
 def _latest_complete_stage(tournament, matches):
-    """The furthest stage that has matches AND all of them have a recorded winner.
-    Returns None if no stage is fully complete yet, or if that stage is already the final
-    (nothing left to advance to)."""
+    """The furthest stage that has matches AND is fully resolved (every matchup has a
+    decided winner - see _stage_is_resolved). Returns None if no stage is fully resolved
+    yet, or if that stage is already the final (nothing left to advance to)."""
     order = stage_order_for(tournament)
     current_stage = None
     for stage in order:
@@ -312,7 +350,7 @@ def _latest_complete_stage(tournament, matches):
     if current_stage is None or current_stage == order[-1]:
         return None
     stage_matches = [m for m in matches if m["stage"] == current_stage]
-    if any(m["winner_pair_id"] is None for m in stage_matches):
+    if not _stage_is_resolved(current_stage, stage_matches):
         return None
     return current_stage
 
@@ -355,14 +393,28 @@ def _next_stage_matches(tournament, from_stage, stage_matches, pairs):
             standings_by_group[g] = ranked_ids
         return engine.generate_next_stage(
             tournament["pairs_count"], groups_count, "group", standings_by_group=standings_by_group)
-    winners = [m["winner_pair_id"] for m in stage_matches]
+    winners = _stage_winners_in_order(stage_matches)
     return engine.generate_next_stage(
         tournament["pairs_count"], groups_count, from_stage, stage_winner_ids_in_order=winners)
 
 
-def advance_to_next_stage(tournament, game_target):
+def _expand_into_legs(next_matches, tid, next_stage, game_target, games_per_matchup):
+    """Turn each {pair_a_id, pair_b_id, match_index} pairing into `games_per_matchup` match
+    rows sharing that match_index (the pairing slot), round_number 1..N distinguishing legs.
+    A decider (round_number 3) is only ever added later if a 2-leg pairing splits 1-1 -
+    see create_matchup_decider."""
+    rows = []
+    for m in next_matches:
+        for leg in range(1, games_per_matchup + 1):
+            rows.append({**m, "tournament_id": tid, "stage": next_stage, "round_number": leg,
+                         "game_target": game_target})
+    return rows
+
+
+def advance_to_next_stage(tournament, game_target, games_per_matchup=1):
     """Admin-triggered: the current stage just finished and nothing has been generated for
-    the next one yet. Creates the next stage's matches with the chosen game_target."""
+    the next one yet. Creates the next stage's matches with the chosen game_target and
+    number of legs (1 or 2) per matchup."""
     tid = tournament["id"]
     matches = list_matches(tid)
     from_stage = _latest_complete_stage(tournament, matches)
@@ -378,8 +430,7 @@ def advance_to_next_stage(tournament, game_target):
     next_stage, next_matches = _next_stage_matches(tournament, from_stage, stage_matches, pairs)
     if next_stage is None:
         return
-    rows = [{**m, "tournament_id": tid, "stage": next_stage, "game_target": game_target} for m in next_matches]
-    create_matches(rows)
+    create_matches(_expand_into_legs(next_matches, tid, next_stage, game_target, games_per_matchup))
 
 
 def recompute_from_stage(tournament, edited_stage):
@@ -398,13 +449,14 @@ def recompute_from_stage(tournament, edited_stage):
 
     if edited_stage == order[-1]:  # editing the final
         final_matches = [m for m in matches if m["stage"] == "final"]
-        if final_matches and final_matches[0]["winner_pair_id"]:
-            update_tournament_status(tid, "completed", winner_pair_id=final_matches[0]["winner_pair_id"])
+        if final_matches and _stage_is_resolved("final", final_matches):
+            winner = _matchup_winner(_matchups_by_index(final_matches)[0])
+            update_tournament_status(tid, "completed", winner_pair_id=winner)
         return
 
     pairs = list_pairs(tid)
     stage_matches = sorted([m for m in matches if m["stage"] == edited_stage], key=lambda m: m["match_index"])
-    if any(m["winner_pair_id"] is None for m in stage_matches):
+    if not _stage_is_resolved(edited_stage, stage_matches):
         return  # stage not complete yet, nothing to (re)generate
 
     next_stage_name = order[order.index(edited_stage) + 1]
@@ -415,15 +467,16 @@ def recompute_from_stage(tournament, edited_stage):
         return  # downstream already has a real result - never touch it
 
     game_target = existing_next[0]["game_target"]
+    games_per_matchup = _infer_games_per_matchup(existing_next)
     next_stage, next_matches = _next_stage_matches(tournament, edited_stage, stage_matches, pairs)
     delete_matches([m["id"] for m in existing_next])
 
     if next_stage is None:
-        update_tournament_status(tid, "completed", winner_pair_id=stage_matches[0]["winner_pair_id"])
+        winner = _matchup_winner(_matchups_by_index(stage_matches)[0])
+        update_tournament_status(tid, "completed", winner_pair_id=winner)
         return
 
-    rows = [{**m, "tournament_id": tid, "stage": next_stage, "game_target": game_target} for m in next_matches]
-    create_matches(rows)
+    create_matches(_expand_into_legs(next_matches, tid, next_stage, game_target, games_per_matchup))
 
 
 def resolve_player_slot(form, prefix, allow_new, current=None):
@@ -784,9 +837,24 @@ def tournament_detail(tid):
 
     knockout_stages = []
     for stage in ("quarterfinal", "semifinal", "final"):
-        stage_matches = sorted([m for m in matches if m["stage"] == stage], key=lambda m: m["match_index"])
-        if stage_matches:
-            knockout_stages.append((stage, stage_matches))
+        stage_matches = [m for m in matches if m["stage"] == stage]
+        if not stage_matches:
+            continue
+        matchups = []
+        for idx in sorted(_matchups_by_index(stage_matches).keys()):
+            rows = _matchups_by_index(stage_matches)[idx]
+            legs = sorted([m for m in rows if m["round_number"] != 3], key=lambda m: m["round_number"] or 1)
+            decider = next((m for m in rows if m["round_number"] == 3), None)
+            needs_decider = (
+                decider is None and len(legs) == 2
+                and all(m["winner_pair_id"] for m in legs)
+                and engine.resolve_matchup(legs[0]["pair_a_id"], legs[0]["pair_b_id"], legs) is None
+            )
+            matchups.append({
+                "match_index": idx, "legs": legs, "decider": decider, "needs_decider": needs_decider,
+                "pair_a": pairs_by_id[legs[0]["pair_a_id"]], "pair_b": pairs_by_id[legs[0]["pair_b_id"]],
+            })
+        knockout_stages.append((stage, matchups))
 
     winner_pair = pairs_by_id.get(tournament.get("winner_pair_id"))
     editable = editable_stages(tournament, matches)
@@ -953,15 +1021,44 @@ def advance_stage(tid):
     if not tournament:
         return redirect(url_for("index"))
     game_target = request.form.get("game_target", "")
+    games_per_matchup = request.form.get("games_per_matchup", "1")
     if game_target not in ("4", "6", "8"):
         flash("יש לבחור עד כמה games תקין", "error")
+        return redirect(url_for("tournament_detail", tid=tid))
+    if games_per_matchup not in ("1", "2"):
+        flash("יש לבחור כמות משחקים תקינה", "error")
         return redirect(url_for("tournament_detail", tid=tid))
     matches = list_matches(tid)
     if stage_pending_advance(tournament, matches) is None:
         flash("אין שלב הממתין להתקדמות כרגע", "error")
         return redirect(url_for("tournament_detail", tid=tid))
-    advance_to_next_stage(tournament, int(game_target))
+    advance_to_next_stage(tournament, int(game_target), int(games_per_matchup))
     flash("השלב הבא נוצר!", "success")
+    return redirect(url_for("tournament_detail", tid=tid))
+
+
+@app.route("/tournaments/<tid>/stages/<stage>/<int:match_index>/decider", methods=["POST"])
+@admin_required
+def create_matchup_decider(tid, stage, match_index):
+    tournament = get_tournament(tid)
+    if not tournament:
+        return redirect(url_for("index"))
+    matchup = [m for m in list_matches(tid) if m["stage"] == stage and m["match_index"] == match_index]
+    if not matchup:
+        return redirect(url_for("tournament_detail", tid=tid))
+    if any(m["round_number"] == 3 for m in matchup):
+        flash("כבר קיים משחק מכריע", "error")
+        return redirect(url_for("tournament_detail", tid=tid))
+    if engine.resolve_matchup(matchup[0]["pair_a_id"], matchup[0]["pair_b_id"], matchup) is not None:
+        flash("הזוגיה הזו כבר הוכרעה", "error")
+        return redirect(url_for("tournament_detail", tid=tid))
+
+    a, b = matchup[0]["pair_a_id"], matchup[0]["pair_b_id"]
+    create_matches([{
+        "tournament_id": tid, "stage": stage, "match_index": match_index, "round_number": 3,
+        "pair_a_id": a, "pair_b_id": b, "game_target": matchup[0]["game_target"],
+    }])
+    flash("משחק מכריע נוצר — הזן/י את התוצאה כשהוא מסתיים", "success")
     return redirect(url_for("tournament_detail", tid=tid))
 
 
