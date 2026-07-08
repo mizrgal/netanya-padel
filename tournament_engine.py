@@ -58,9 +58,11 @@ def compute_group_standings(pair_ids, group_matches, tiebreak_winners=None):
     tiebreak_winners: optional {frozenset({pair_a, pair_b}): winner_pair_id} for any manual
     tie-break matches played between two pairs that are statistically tied.
 
-    Returns list of pair_ids ranked best-first: wins desc, game_diff desc, games_won desc,
-    with an exact statistical tie between two pairs broken by tiebreak_winners if present.
-    Ties with no recorded tie-break keep stable input order.
+    Returns list of pair_ids ranked best-first: wins desc, then game_diff desc (the two
+    standard padel round-robin tie-break criteria), with an exact tie on both of those
+    broken by tiebreak_winners if present. Ties with no recorded tie-break keep stable
+    input order - games_won is NOT used as a silent third tiebreaker, since that would
+    hide a real tie from the admin instead of surfacing it for a tie-break match.
     """
     tiebreak_winners = tiebreak_winners or {}
     stats = {pid: {"wins": 0, "games_won": 0, "games_lost": 0} for pid in pair_ids}
@@ -83,7 +85,7 @@ def compute_group_standings(pair_ids, group_matches, tiebreak_winners=None):
     def stat_key(pid):
         s = stats[pid]
         diff = s["games_won"] - s["games_lost"]
-        return (-s["wins"], -diff, -s["games_won"])
+        return (-s["wins"], -diff)
 
     def compare(a, b):
         ka, kb = stat_key(a), stat_key(b)
@@ -101,13 +103,13 @@ def compute_group_standings(pair_ids, group_matches, tiebreak_winners=None):
 
 
 def find_stat_ties(pair_ids, stats):
-    """Groups of 2+ pair_ids that are exactly tied on (wins, game_diff, games_won) -
-    candidates for a manual tie-break match."""
+    """Groups of 2+ pair_ids exactly tied on (wins, game_diff) - candidates for a manual
+    tie-break match. Matches the ranking criteria in compute_group_standings exactly."""
     buckets = {}
     for pid in pair_ids:
         s = stats[pid]
         diff = s["games_won"] - s["games_lost"]
-        key = (s["wins"], diff, s["games_won"])
+        key = (s["wins"], diff)
         buckets.setdefault(key, []).append(pid)
     return [pids for pids in buckets.values() if len(pids) >= 2]
 
