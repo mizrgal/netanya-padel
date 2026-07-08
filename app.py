@@ -106,6 +106,18 @@ def list_users():
     return db_get("/rest/v1/padel_users?select=*&order=created_at.desc")
 
 
+def delete_user(user_id):
+    """Hard delete. player1_name/player2_name (and added_by/created_by) are already
+    denormalized onto pairs/tournaments, so unlinking the account's FK references first
+    (rather than cascading the delete into pairs/matches) keeps all existing tournament
+    history and displays intact - the user just becomes an unlinked guest name."""
+    db_patch("padel_pairs", f"player1_id=eq.{user_id}", {"player1_id": None})
+    db_patch("padel_pairs", f"player2_id=eq.{user_id}", {"player2_id": None})
+    db_patch("padel_pairs", f"added_by=eq.{user_id}", {"added_by": None})
+    db_patch("padel_tournaments", f"created_by=eq.{user_id}", {"created_by": None})
+    _supa("DELETE", f"/rest/v1/padel_users?id=eq.{user_id}")
+
+
 def search_users(q, exclude_ids=()):
     like = quote(f"%{q}%")
     rows = db_get(
@@ -687,6 +699,20 @@ def admin_user_edit(uid):
         return render_template("admin_user_edit.html", user=user)
 
     return render_template("admin_user_edit.html", user=user)
+
+
+@app.route("/admin/users/<uid>/delete", methods=["POST"])
+@admin_required
+def admin_user_delete(uid):
+    if uid == session["user_id"]:
+        flash("אי אפשר למחוק את עצמך", "error")
+        return redirect(url_for("admin_users"))
+    user = get_user_by_id(uid)
+    if not user:
+        return redirect(url_for("admin_users"))
+    delete_user(uid)
+    flash(f"המשתמש '{user['username']}' נמחק", "success")
+    return redirect(url_for("admin_users"))
 
 
 # ─── Tournament detail, registration, draw, scoring ─────────────────────────
