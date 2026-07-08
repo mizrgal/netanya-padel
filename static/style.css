@@ -78,9 +78,34 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .btn-gold { background: var(--gold); color: var(--navy); }
 .btn-gold:hover { background: #e0a935; }
 .btn-block { width: 100%; }
-.btn-small { padding: 7px 12px; font-size: 13px; }
+.btn-small { min-height: 32px; padding: 6px 12px; font-size: 13px; }
 .btn-outline { background: #fff; color: var(--navy); border: 1.5px solid var(--navy); }
 .btn-outline:hover { background: var(--bg); }
+
+.row-actions { text-align: left; white-space: nowrap; }
+.row-actions form { display: inline-block; margin: 0; vertical-align: middle; }
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  border-radius: 7px;
+  background: transparent;
+  border: none;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  text-decoration: none;
+  color: #888;
+  vertical-align: middle;
+  transition: background .15s, color .15s;
+}
+.icon-btn:hover { background: var(--bg); color: var(--navy); }
+.icon-btn-danger:hover { background: #fff0f0; color: var(--red); }
 
 .flash { border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-bottom: 16px; text-align: right; }
 .flash-error { background: #fff0f0; color: var(--red); }

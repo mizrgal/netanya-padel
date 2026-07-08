@@ -14,7 +14,7 @@
             {% else %}<span class="muted">משתמש</span>{% endif %}
           </td>
           <td>{{ u.created_at[:10] }}</td>
-          <td><a href="{{ url_for('admin_user_edit', uid=u.id) }}" class="btn btn-small btn-outline">עריכה</a></td>
+          <td class="row-actions"><a href="{{ url_for('admin_user_edit', uid=u.id) }}" class="icon-btn" title="עריכה" aria-label="עריכה">✏️</a></td>
         </tr>
       {% endfor %}
     </table>
