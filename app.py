@@ -97,6 +97,10 @@ def get_user_by_username(username):
     return rows[0] if rows else None
 
 
+def update_user(user_id, updates):
+    db_patch("padel_users", f"id=eq.{user_id}", updates)
+
+
 def search_users(q, exclude_ids=()):
     like = quote(f"%{q}%")
     rows = db_get(
@@ -394,6 +398,44 @@ def login_page():
 def logout():
     session.clear()
     return redirect(url_for("login_page"))
+
+
+@app.route("/profile")
+@login_required
+def profile():
+    user = get_user_by_id(session["user_id"])
+    return render_template("profile.html", user=user)
+
+
+@app.route("/profile/phone", methods=["POST"])
+@login_required
+def update_phone():
+    phone = request.form.get("phone", "").strip()
+    if not phone:
+        flash("נא להזין מספר טלפון", "error")
+    else:
+        update_user(session["user_id"], {"phone": phone})
+        flash("הטלפון עודכן בהצלחה", "success")
+    return redirect(url_for("profile"))
+
+
+@app.route("/profile/password", methods=["POST"])
+@login_required
+def update_password():
+    current = request.form.get("current_password", "").strip()
+    new = request.form.get("new_password", "").strip()
+    confirm = request.form.get("confirm_password", "").strip()
+    user = get_user_by_id(session["user_id"])
+    if not check_password_hash(user["password_hash"], current):
+        flash("הסיסמה הנוכחית שגויה", "error")
+    elif not new or len(new) < 4:
+        flash("סיסמה חדשה חייבת להכיל לפחות 4 תווים", "error")
+    elif new != confirm:
+        flash("הסיסמאות החדשות אינן תואמות", "error")
+    else:
+        update_user(session["user_id"], {"password_hash": generate_password_hash(new)})
+        flash("הסיסמה עודכנה בהצלחה", "success")
+    return redirect(url_for("profile"))
 
 
 # ─── Dashboard & tournament creation ────────────────────────────────────────
