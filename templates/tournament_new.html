@@ -1,0 +1,31 @@
+{% extends "base_app.html" %}
+{% block title %}טורניר חדש – Netanya Padel{% endblock %}
+{% block content %}
+  <h1>יצירת טורניר חדש</h1>
+  <div class="card" style="max-width:420px;">
+    <form method="POST" action="{{ url_for('tournament_new') }}">
+      <label>שם הטורניר</label>
+      <input type="text" name="name" required autofocus>
+
+      <label>תאריך</label>
+      <input type="date" name="date" required>
+
+      <label>רמה</label>
+      <input type="text" name="level" placeholder="למשל: מתקדמים, רמה 4-5" required>
+
+      <label>כמות זוגות</label>
+      <select name="pairs_count" required>
+        <option value="8">8 זוגות (2 בתים)</option>
+        <option value="16">16 זוגות (4 בתים)</option>
+      </select>
+
+      <label>אורך משחק</label>
+      <select name="game_target" required>
+        <option value="4">עד 4 games</option>
+        <option value="6">עד 6 games</option>
+      </select>
+
+      <button type="submit" class="btn-block btn-gold">צור טורניר</button>
+    </form>
+  </div>
+{% endblock %}

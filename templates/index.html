@@ -1,0 +1,20 @@
+{% extends "base_app.html" %}
+{% block title %}טורנירים – Netanya Padel{% endblock %}
+{% block content %}
+  <h1>טורנירים</h1>
+  {% if not tournaments %}
+    <p class="muted">אין עדיין טורנירים. {% if session.get('is_admin') %}<a href="{{ url_for('tournament_new') }}">צור/י טורניר ראשון</a>.{% endif %}</p>
+  {% else %}
+    <div class="tournament-list">
+      {% for t in tournaments %}
+        <a class="tournament-row" href="{{ url_for('tournament_detail', tid=t.id) }}">
+          <div>
+            <div class="name">{{ t.name }}</div>
+            <div class="meta">{{ t.date }} · רמה {{ t.level }} · {{ t.pairs_count }} זוגות · עד {{ t.game_target }}</div>
+          </div>
+          <span class="badge badge-{{ t.status }}">{{ STATUS_LABELS.get(t.status, t.status) }}</span>
+        </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endblock %}

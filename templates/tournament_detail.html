@@ -1,0 +1,214 @@
+{% extends "base_app.html" %}
+{% block title %}{{ tournament.name }} – Netanya Padel{% endblock %}
+
+{% macro pair_name(pair) %}{{ pair.player1_name }} / {{ pair.player2_name }}{% endmacro %}
+
+{% macro player_slot(prefix, label, allow_new) %}
+<div class="slot" data-prefix="{{ prefix }}">
+  <label>{{ label }}</label>
+  <div class="slot-toggle">
+    <button type="button" class="mode-btn active" data-mode="existing">משתמש קיים באתר</button>
+    <button type="button" class="mode-btn" data-mode="guest">שם חופשי (בלי חשבון)</button>
+    {% if allow_new %}<button type="button" class="mode-btn" data-mode="new">צור משתמש חדש</button>{% endif %}
+  </div>
+  <input type="hidden" name="{{ prefix }}_mode" value="existing">
+
+  <div class="slot-fields active" data-mode-fields="existing">
+    <input type="text" class="user-search" placeholder="חיפוש לפי שם משתמש או טלפון" autocomplete="off">
+    <div class="search-results"></div>
+    <input type="hidden" name="{{ prefix }}_user_id">
+    <div class="hint selected-user-hint">&nbsp;</div>
+  </div>
+
+  <div class="slot-fields" data-mode-fields="guest">
+    <input type="text" name="{{ prefix }}_guest_name" placeholder="שם מלא">
+    <input type="tel" name="{{ prefix }}_guest_phone" placeholder="טלפון (לא חובה)">
+  </div>
+
+  {% if allow_new %}
+  <div class="slot-fields" data-mode-fields="new">
+    <input type="text" name="{{ prefix }}_new_username" placeholder="שם משתמש חדש">
+    <input type="tel" name="{{ prefix }}_new_phone" placeholder="טלפון">
+    <input type="password" name="{{ prefix }}_new_password" placeholder="סיסמה (ריק = תיווצר אוטומטית)">
+  </div>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{% block content %}
+  <h1>{{ tournament.name }}
+    <span class="badge badge-{{ tournament.status }}">{{ STATUS_LABELS.get(tournament.status, tournament.status) }}</span>
+  </h1>
+  <p class="muted">{{ tournament.date }} · רמה {{ tournament.level }} · {{ tournament.pairs_count }} זוגות · עד {{ tournament.game_target }} games</p>
+
+  {% if tournament.status == 'completed' and winner_pair %}
+    <div class="winner-banner">🏆 הזוג המנצח: {{ pair_name(winner_pair) }} 🏆</div>
+  {% endif %}
+
+  {% if tournament.status == 'open' %}
+    <h2>זוגות רשומים ({{ pairs|length }}/{{ tournament.pairs_count }})</h2>
+    {% if pairs %}
+      <table>
+        <tr><th>זוג</th></tr>
+        {% for p in pairs %}<tr><td>{{ pair_name(p) }}</td></tr>{% endfor %}
+      </table>
+    {% else %}
+      <p class="muted">עדיין אין נרשמים.</p>
+    {% endif %}
+
+    {% if spots_left > 0 %}
+      {% if not already_in %}
+        <h2>הרשמה לטורניר</h2>
+        <div class="card" style="max-width:420px;">
+          <form method="POST" action="{{ url_for('register_pair', tid=tournament.id) }}">
+            <p class="hint">אתם נרשמים בתור {{ session.get('username') }} — צריך לבחור שותף/ה.</p>
+            {{ player_slot('p2', 'שותף/ה', false) }}
+            <button type="submit" class="btn-block btn-gold">הרשמה לטורניר</button>
+          </form>
+        </div>
+      {% else %}
+        <p class="muted">את/ה כבר רשום/ה לטורניר הזה.</p>
+      {% endif %}
+
+      {% if session.get('is_admin') %}
+        <h2>הוספת זוג ע"י מנהל</h2>
+        <div class="card" style="max-width:520px;">
+          <form method="POST" action="{{ url_for('admin_add_pair', tid=tournament.id) }}">
+            {{ player_slot('p1', 'משתתף/ת 1', true) }}
+            {{ player_slot('p2', 'משתתף/ת 2', true) }}
+            <button type="submit" class="btn-block btn-outline">הוספת זוג</button>
+          </form>
+        </div>
+      {% endif %}
+    {% else %}
+      <p class="muted">הטורניר מלא — ממתין להגרלה.</p>
+    {% endif %}
+  {% endif %}
+
+  {% if tournament.status in ('full', 'in_progress', 'completed') %}
+    {% if tournament.status == 'full' and session.get('is_admin') %}
+      <form method="POST" action="{{ url_for('start_tournament', tid=tournament.id) }}" style="margin-bottom:20px;">
+        <button type="submit" class="btn-gold">התחל טורניר</button>
+      </form>
+    {% endif %}
+
+    <h2>שלב הבתים</h2>
+    {% for g, data in groups.items() %}
+      <div class="group-block">
+        <h2 style="margin-top:0;">בית {{ g }}</h2>
+        <table style="margin-bottom:10px;">
+          <tr><th>#</th><th>זוג</th><th>נצחונות</th><th>הפרש</th><th>הפרשי משחקים</th></tr>
+          {% for row in data.standings %}
+            <tr class="{{ 'rank-1' if loop.index == 1 else ('rank-2' if loop.index == 2 else '') }}">
+              <td>{{ loop.index }}</td>
+              <td>{{ pair_name(row.pair) }}</td>
+              <td>{{ row.wins }}</td>
+              <td>{{ row.games_won - row.games_lost }}</td>
+              <td>{{ row.games_won }}:{{ row.games_lost }}</td>
+            </tr>
+          {% endfor %}
+        </table>
+        {% for m in data.matches %}
+          <div class="match-card">
+            <div class="match-pairs">מחזור {{ m.round_number }}: {{ pair_name(pairs_by_id[m.pair_a_id]) }} נגד {{ pair_name(pairs_by_id[m.pair_b_id]) }}</div>
+            {% if m.winner_pair_id %}
+              <div class="match-score">{{ m.score_a }} : {{ m.score_b }}</div>
+            {% elif session.get('is_admin') and tournament.status == 'in_progress' %}
+              <form method="POST" action="{{ url_for('submit_score', mid=m.id) }}" class="score-form">
+                <input type="number" name="score_a" min="0" required>
+                <span>:</span>
+                <input type="number" name="score_b" min="0" required>
+                <button type="submit" class="btn-small">שמור</button>
+              </form>
+            {% else %}
+              <div class="match-score pending">טרם שוחק</div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    {% endfor %}
+
+    {% for stage, stage_matches in knockout_stages %}
+      <h2>{{ STAGE_LABELS.get(stage, stage) }}</h2>
+      {% for m in stage_matches %}
+        <div class="match-card">
+          <div class="match-pairs">{{ pair_name(pairs_by_id[m.pair_a_id]) }} נגד {{ pair_name(pairs_by_id[m.pair_b_id]) }}</div>
+          {% if m.winner_pair_id %}
+            <div class="match-score">{{ m.score_a }} : {{ m.score_b }}</div>
+          {% elif session.get('is_admin') and tournament.status == 'in_progress' %}
+            <form method="POST" action="{{ url_for('submit_score', mid=m.id) }}" class="score-form">
+              <input type="number" name="score_a" min="0" required>
+              <span>:</span>
+              <input type="number" name="score_b" min="0" required>
+              <button type="submit" class="btn-small">שמור</button>
+            </form>
+          {% else %}
+            <div class="match-score pending">טרם שוחק</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    {% endfor %}
+  {% endif %}
+
+  <script>
+    document.querySelectorAll('.slot').forEach(function (slot) {
+      var modeInput = slot.querySelector('input[name$="_mode"]');
+      var buttons = slot.querySelectorAll('.mode-btn');
+      buttons.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          buttons.forEach(function (b) { b.classList.remove('active'); });
+          btn.classList.add('active');
+          var mode = btn.dataset.mode;
+          modeInput.value = mode;
+          slot.querySelectorAll('.slot-fields').forEach(function (f) {
+            f.classList.toggle('active', f.dataset.modeFields === mode);
+          });
+        });
+      });
+
+      var searchInput = slot.querySelector('.user-search');
+      if (searchInput) {
+        var resultsBox = slot.querySelector('.search-results');
+        var hiddenId = slot.querySelector('input[name$="_user_id"]');
+        var hint = slot.querySelector('.selected-user-hint');
+        var debounceTimer;
+        searchInput.addEventListener('input', function () {
+          hiddenId.value = '';
+          hint.textContent = '';
+          clearTimeout(debounceTimer);
+          var q = searchInput.value.trim();
+          if (q.length < 2) {
+            resultsBox.classList.remove('active');
+            resultsBox.innerHTML = '';
+            return;
+          }
+          debounceTimer = setTimeout(function () {
+            fetch('/api/users/search?q=' + encodeURIComponent(q))
+              .then(function (r) { return r.json(); })
+              .then(function (users) {
+                resultsBox.innerHTML = '';
+                if (!users.length) {
+                  resultsBox.classList.remove('active');
+                  return;
+                }
+                users.forEach(function (u) {
+                  var item = document.createElement('div');
+                  item.className = 'search-result-item';
+                  item.textContent = u.username + ' (' + u.phone + ')';
+                  item.addEventListener('click', function () {
+                    hiddenId.value = u.id;
+                    searchInput.value = u.username;
+                    hint.textContent = 'נבחר/ה: ' + u.username;
+                    resultsBox.classList.remove('active');
+                    resultsBox.innerHTML = '';
+                  });
+                  resultsBox.appendChild(item);
+                });
+                resultsBox.classList.add('active');
+              });
+          }, 250);
+        });
+      }
+    });
+  </script>
+{% endblock %}

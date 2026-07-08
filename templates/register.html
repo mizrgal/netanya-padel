@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Netanya Padel – הרשמה</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="center-screen">
+    <div class="card auth-card">
+      <div class="logo">Netanya <span>Padel</span> 🎾</div>
+      <div class="subtitle">יצירת חשבון חדש</div>
+
+      {% for category, message in get_flashed_messages(with_categories=true) %}
+        <div class="flash flash-{{ category }}">{{ message }}</div>
+      {% endfor %}
+
+      <form method="POST" action="{{ url_for('register') }}">
+        <label>שם משתמש</label>
+        <input type="text" name="username" required autofocus>
+        <label>טלפון</label>
+        <input type="tel" name="phone" placeholder="050-1234567" required>
+        <label>סיסמה</label>
+        <input type="password" name="password" placeholder="לפחות 4 תווים" required>
+        <button type="submit" class="btn-block">הרשמה</button>
+      </form>
+      <div style="margin-top:20px; font-size:13px; color:#888;">
+        כבר רשום/ה?
+        <a href="{{ url_for('login_page') }}" style="color:var(--navy); font-weight:600;">כניסה</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
