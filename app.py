@@ -171,6 +171,15 @@ def list_pairs(tid):
     return db_get(f"/rest/v1/padel_pairs?tournament_id=eq.{quote(tid)}&select=*&order=created_at.asc")
 
 
+def get_pair(pid):
+    rows = db_get(f"/rest/v1/padel_pairs?id=eq.{quote(pid)}&select=*")
+    return rows[0] if rows else None
+
+
+def update_pair(pid, updates):
+    db_patch("padel_pairs", f"id=eq.{pid}", updates)
+
+
 def list_pairs_for_user(user_id):
     uid = quote(user_id)
     return db_get(
@@ -417,10 +426,15 @@ def recompute_from_stage(tournament, edited_stage):
     create_matches(rows)
 
 
-def resolve_player_slot(form, prefix, allow_new):
+def resolve_player_slot(form, prefix, allow_new, current=None):
     """Resolve one side of a pair from form data. Returns (user_id_or_None, name, phone).
-    Raises ValueError with a Hebrew message the caller can flash straight to the user."""
+    Raises ValueError with a Hebrew message the caller can flash straight to the user.
+    `current`, if given, is (id_or_None, name, phone) returned as-is for mode == "keep"
+    (used when editing a pair without touching a slot)."""
     mode = form.get(f"{prefix}_mode", "guest")
+
+    if mode == "keep" and current is not None:
+        return current
 
     if mode == "existing":
         uid = form.get(f"{prefix}_user_id", "").strip()
@@ -857,6 +871,68 @@ def admin_add_pair(tid):
     tournament = get_tournament(tid)
     maybe_run_draw(tournament)
     flash("הזוג נוסף לטורניר", "success")
+    return redirect(url_for("tournament_detail", tid=tid))
+
+
+@app.route("/tournaments/<tid>/pairs/<pid>/edit", methods=["GET", "POST"])
+@admin_required
+def edit_pair(tid, pid):
+    tournament = get_tournament(tid)
+    pair = get_pair(pid)
+    if not tournament or not pair or pair["tournament_id"] != tid:
+        return redirect(url_for("tournament_detail", tid=tid))
+    if tournament["status"] not in ("open", "full"):
+        flash("אי אפשר לערוך זוג אחרי שהטורניר התחיל", "error")
+        return redirect(url_for("tournament_detail", tid=tid))
+
+    if request.method == "POST":
+        current_p1 = (pair["player1_id"], pair["player1_name"], pair["player1_phone"])
+        current_p2 = (pair["player2_id"], pair["player2_name"], pair["player2_phone"])
+        try:
+            p1_id, p1_name, p1_phone = resolve_player_slot(request.form, "p1", allow_new=True, current=current_p1)
+            p2_id, p2_name, p2_phone = resolve_player_slot(request.form, "p2", allow_new=True, current=current_p2)
+        except ValueError as e:
+            flash(str(e), "error")
+            return render_template("pair_edit.html", tournament=tournament, pair=pair)
+
+        other_pairs = [p for p in list_pairs(tid) if p["id"] != pid]
+        if pair_conflicts(other_pairs, p1_id, p2_id):
+            flash("אחד המשתתפים כבר רשום לטורניר הזה בזוג אחר", "error")
+            return render_template("pair_edit.html", tournament=tournament, pair=pair)
+
+        update_pair(pid, {
+            "player1_id": p1_id, "player1_name": p1_name, "player1_phone": p1_phone,
+            "player2_id": p2_id, "player2_name": p2_name, "player2_phone": p2_phone,
+        })
+        flash("הזוג עודכן", "success")
+        return redirect(url_for("tournament_detail", tid=tid))
+
+    return render_template("pair_edit.html", tournament=tournament, pair=pair)
+
+
+@app.route("/tournaments/<tid>/pairs/<pid>/delete", methods=["POST"])
+@admin_required
+def delete_pair_route(tid, pid):
+    tournament = get_tournament(tid)
+    pair = get_pair(pid)
+    if not tournament or not pair or pair["tournament_id"] != tid:
+        return redirect(url_for("tournament_detail", tid=tid))
+    if tournament["status"] not in ("open", "full"):
+        flash("אי אפשר להסיר זוג אחרי שהטורניר התחיל", "error")
+        return redirect(url_for("tournament_detail", tid=tid))
+
+    if tournament["status"] == "full":
+        # the draw already happened - removing one pair breaks every group's round-robin,
+        # so undo the whole draw (no scores exist yet, nothing real is lost) and reopen
+        # registration. A fresh draw runs automatically once the tournament refills.
+        delete_matches([m["id"] for m in list_matches(tid) if m["stage"] == "group"])
+        for p in list_pairs(tid):
+            if p["id"] != pid:
+                update_pair_group(p["id"], None)
+        update_tournament_status(tid, "open")
+
+    delete_pairs([pid])
+    flash("הזוג הוסר מהטורניר", "success")
     return redirect(url_for("tournament_detail", tid=tid))
 
 

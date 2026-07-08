@@ -1,1 +1,34 @@
 {% macro pair_name(pair) %}{{ pair.player1_name }} / {{ pair.player2_name }}{% endmacro %}
+
+{% macro player_slot(prefix, label, allow_new, keep=false) %}
+<div class="slot" data-prefix="{{ prefix }}">
+  <label>{{ label }}</label>
+  <div class="slot-toggle">
+    {% if keep %}<button type="button" class="mode-btn active" data-mode="keep">ללא שינוי</button>{% endif %}
+    <button type="button" class="mode-btn{{ '' if keep else ' active' }}" data-mode="existing">משתמש קיים באתר</button>
+    <button type="button" class="mode-btn" data-mode="guest">שם חופשי (בלי חשבון)</button>
+    {% if allow_new %}<button type="button" class="mode-btn" data-mode="new">צור משתמש חדש</button>{% endif %}
+  </div>
+  <input type="hidden" name="{{ prefix }}_mode" value="{{ 'keep' if keep else 'existing' }}">
+
+  <div class="slot-fields{{ '' if keep else ' active' }}" data-mode-fields="existing">
+    <input type="text" class="user-search" placeholder="חיפוש לפי שם משתמש או טלפון" autocomplete="off">
+    <div class="search-results"></div>
+    <input type="hidden" name="{{ prefix }}_user_id">
+    <div class="hint selected-user-hint">&nbsp;</div>
+  </div>
+
+  <div class="slot-fields" data-mode-fields="guest">
+    <input type="text" name="{{ prefix }}_guest_name" placeholder="שם מלא">
+    <input type="tel" name="{{ prefix }}_guest_phone" placeholder="טלפון (לא חובה)">
+  </div>
+
+  {% if allow_new %}
+  <div class="slot-fields" data-mode-fields="new">
+    <input type="text" name="{{ prefix }}_new_username" placeholder="שם משתמש חדש">
+    <input type="tel" name="{{ prefix }}_new_phone" placeholder="טלפון">
+    <input type="password" name="{{ prefix }}_new_password" placeholder="סיסמה (ריק = תיווצר אוטומטית)">
+  </div>
+  {% endif %}
+</div>
+{% endmacro %}
