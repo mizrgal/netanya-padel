@@ -425,6 +425,33 @@ def tournament_new():
     return render_template("tournament_new.html")
 
 
+@app.route("/admin/users/new", methods=["GET", "POST"])
+@admin_required
+def admin_user_new():
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        phone = request.form.get("phone", "").strip()
+        password = request.form.get("password", "").strip()
+        is_admin = request.form.get("is_admin") == "on"
+        if not username or not phone:
+            flash("נא למלא שם משתמש וטלפון", "error")
+        elif get_user_by_username(username):
+            flash("שם המשתמש כבר תפוס", "error")
+        else:
+            generated = False
+            if not password:
+                password = "".join(random.choices(string.digits, k=6))
+                generated = True
+            create_user(username, phone, password, is_admin=is_admin)
+            role = "אדמין" if is_admin else "משתמש"
+            msg = f"נוצר {role} חדש: '{username}'"
+            if generated:
+                msg += f" עם סיסמה זמנית: {password}"
+            flash(msg, "success")
+            return redirect(url_for("admin_user_new"))
+    return render_template("admin_user_new.html")
+
+
 # ─── Tournament detail, registration, draw, scoring ─────────────────────────
 @app.route("/tournaments/<tid>")
 @login_required

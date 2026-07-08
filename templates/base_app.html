@@ -12,6 +12,7 @@
     <div class="topbar-links">
       {% if session.get('is_admin') %}
         <a href="{{ url_for('tournament_new') }}">+ טורניר חדש</a>
+        <a href="{{ url_for('admin_user_new') }}">+ משתמש חדש</a>
       {% endif %}
       <span>שלום, {{ session.get('username', '') }}</span>
       <a href="{{ url_for('logout') }}">התנתקות</a>
