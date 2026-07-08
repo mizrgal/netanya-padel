@@ -858,6 +858,9 @@ def tournament_detail(tid):
         # display order: matchups still waiting on a result float to the top
         matchups.sort(key=lambda mu: (mu["resolved"], mu["match_index"]))
         knockout_stages.append((stage, matchups))
+    # most advanced stage first (e.g. semifinal above the now-historical group stage),
+    # so the section that actually needs attention isn't buried below finished ones
+    knockout_stages.reverse()
 
     winner_pair = pairs_by_id.get(tournament.get("winner_pair_id"))
     editable = editable_stages(tournament, matches)
