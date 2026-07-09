@@ -147,6 +147,10 @@ def generate_next_stage(tournament_pairs_count, groups_count, current_stage, sta
     """
     if current_stage == "group":
         qualifiers = group_qualifiers(groups_count, standings_by_group)
+        if groups_count == 1:
+            return "final", _with_match_index([
+                {"pair_a_id": _qualifier_pair_id(qualifiers, 1, 1), "pair_b_id": _qualifier_pair_id(qualifiers, 1, 2)},
+            ])
         if groups_count == 2:
             return "semifinal", _with_match_index([
                 {"pair_a_id": _qualifier_pair_id(qualifiers, 1, 1), "pair_b_id": _qualifier_pair_id(qualifiers, 2, 2)},

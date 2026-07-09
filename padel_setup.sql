@@ -14,7 +14,7 @@ create table if not exists padel_tournaments (
   name text not null,
   date date not null,
   level text not null,
-  pairs_count int not null check (pairs_count in (8, 16)),
+  pairs_count int not null check (pairs_count in (4, 8, 16)),
   groups_count int not null,
   game_target int not null check (game_target in (4, 6, 8)),
   status text not null default 'open', -- open -> full -> in_progress -> completed

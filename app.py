@@ -261,7 +261,10 @@ def maybe_run_draw(tournament):
 
 
 def stage_order_for(tournament):
-    return ["group"] + (["quarterfinal"] if tournament["groups_count"] == 4 else []) + ["semifinal", "final"]
+    groups_count = tournament["groups_count"]
+    if groups_count == 1:
+        return ["group", "final"]
+    return ["group"] + (["quarterfinal"] if groups_count == 4 else []) + ["semifinal", "final"]
 
 
 def editable_stages(tournament, matches):
@@ -678,7 +681,7 @@ def tournament_new():
         game_target = request.form.get("game_target", "")
         if not name or not date or not level:
             flash("נא למלא את כל השדות", "error")
-        elif pairs_count not in ("8", "16"):
+        elif pairs_count not in ("4", "8", "16"):
             flash("יש לבחור כמות זוגות תקינה", "error")
         elif game_target not in ("4", "6", "8"):
             flash("יש לבחור משך משחק תקין", "error")
