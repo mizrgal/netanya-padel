@@ -9,7 +9,10 @@
       {% for t in tournaments %}
         <a class="tournament-row status-{{ t.status }}" href="{{ url_for('tournament_detail', tid=t.id) }}">
           <div class="tournament-row-top">
-            <span class="name">{{ t.name }}</span>
+            <span class="name">
+              {{ t.name }}
+              {% if t.price_per_player is not none %}<span class="price-chip">💰 ₪{{ t.price_per_player|int }}</span>{% endif %}
+            </span>
             <span class="badge badge-{{ t.status }}">{{ STATUS_LABELS.get(t.status, t.status) }}</span>
           </div>
           <div class="meta">📅 {{ t.date }} &nbsp;·&nbsp; רמה {{ t.level }}</div>
