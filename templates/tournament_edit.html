@@ -13,6 +13,12 @@
       <label>רמה</label>
       <input type="text" name="level" value="{{ tournament.level }}" required>
 
+      <label>מיקום הטורניר (לא חובה)</label>
+      <input type="text" name="location" value="{{ tournament.location or '' }}" placeholder="למשל: מגרשי הפאדל, נתניה">
+
+      <label>מנהל/ת הטורניר - איש קשר (לא חובה)</label>
+      <input type="text" name="manager" value="{{ tournament.manager or '' }}" placeholder="למשל: גל מזרחי, 050-1234567">
+
       <label>עלות השתתפות לאדם (₪, לא חובה)</label>
       <input type="number" name="price_per_player" min="0" step="1"
              value="{{ tournament.price_per_player|int if tournament.price_per_player is not none else '' }}"

@@ -146,12 +146,13 @@ def get_tournament(tid):
 
 
 def create_tournament(name, date, level, pairs_count, game_target, created_by,
-                       price_per_player=None, about=None):
+                       price_per_player=None, about=None, manager=None, location=None):
     return db_insert("padel_tournaments", {
         "name": name, "date": date, "level": level,
         "pairs_count": pairs_count, "groups_count": pairs_count // 4,
         "game_target": game_target, "status": "open", "created_by": created_by,
         "price_per_player": price_per_player, "about": about,
+        "manager": manager, "location": location,
     })
 
 
@@ -708,6 +709,8 @@ def tournament_new():
         pairs_count = request.form.get("pairs_count", "")
         game_target = request.form.get("game_target", "")
         about = request.form.get("about", "").strip() or None
+        manager = request.form.get("manager", "").strip() or None
+        location = request.form.get("location", "").strip() or None
         price, price_error = parse_price(request.form.get("price_per_player", ""))
         if not name or not date or not level:
             flash("נא למלא את כל השדות", "error")
@@ -719,7 +722,8 @@ def tournament_new():
             flash(price_error, "error")
         else:
             t = create_tournament(name, date, level, int(pairs_count), int(game_target),
-                                   session["user_id"], price_per_player=price, about=about)
+                                   session["user_id"], price_per_player=price, about=about,
+                                   manager=manager, location=location)
             return redirect(url_for("tournament_detail", tid=t["id"]))
     return render_template("tournament_new.html")
 
@@ -745,7 +749,10 @@ def tournament_edit(tid):
             return render_template("tournament_edit.html", tournament=tournament)
 
         about = request.form.get("about", "").strip() or None
-        updates = {"name": name, "date": date, "level": level, "price_per_player": price, "about": about}
+        manager = request.form.get("manager", "").strip() or None
+        location = request.form.get("location", "").strip() or None
+        updates = {"name": name, "date": date, "level": level, "price_per_player": price,
+                   "about": about, "manager": manager, "location": location}
 
         if tournament["status"] == "open":
             pairs_count = request.form.get("pairs_count", "")

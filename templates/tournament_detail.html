@@ -39,8 +39,11 @@
     <span class="badge badge-{{ tournament.status }}">{{ STATUS_LABELS.get(tournament.status, tournament.status) }}</span>
   </h1>
   <p class="muted">
-    {{ tournament.date }} · רמה {{ tournament.level }} · {{ tournament.pairs_count }} זוגות · עד {{ tournament.game_target }} games בשלב הבתים
+    {{ tournament.date }}
+    {% if tournament.location %} · 📍 {{ tournament.location }}{% endif %}
+    · רמה {{ tournament.level }} · {{ tournament.pairs_count }} זוגות · עד {{ tournament.game_target }} games בשלב הבתים
     {% if tournament.price_per_player is not none %} · 💰 ₪{{ tournament.price_per_player|int }} לאדם{% endif %}
+    {% if tournament.manager %} · 👤 {{ tournament.manager }}{% endif %}
   </p>
 
   {% if tournament.about %}

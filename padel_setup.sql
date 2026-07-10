@@ -19,6 +19,8 @@ create table if not exists padel_tournaments (
   game_target int not null check (game_target in (4, 6, 8)),
   price_per_player numeric(10,2),
   about text,
+  manager text,
+  location text,
   status text not null default 'open', -- open -> full -> in_progress -> completed
   winner_pair_id uuid,
   created_by uuid references padel_users(id),
