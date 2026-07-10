@@ -43,7 +43,7 @@ a { color: inherit; }
 
 label { display: block; text-align: right; font-size: 13px; color: #444; margin-bottom: 5px; }
 
-input, select {
+input, select, textarea {
   width: 100%;
   min-height: 44px;
   padding: 11px 14px;
@@ -55,7 +55,8 @@ input, select {
   font-family: inherit;
   transition: border-color .2s;
 }
-input:focus, select:focus { border-color: var(--navy); }
+input:focus, select:focus, textarea:focus { border-color: var(--navy); }
+textarea { resize: vertical; line-height: 1.5; }
 
 button, .btn {
   display: inline-block;
@@ -248,6 +249,10 @@ tr:last-child td { border-bottom: none; }
 .edit-toggle summary:hover { background: var(--bg); color: var(--navy); }
 .edit-toggle[open] summary { color: var(--navy); font-weight: 600; margin-bottom: 6px; }
 .edit-toggle .score-form { flex-wrap: wrap; }
+
+.about-card { margin-bottom: 20px; }
+.about-card h2 { font-size: 15px; }
+.about-text { white-space: pre-line; font-size: 14px; line-height: 1.7; color: #444; }
 
 .winner-banner {
   background: linear-gradient(135deg, var(--gold), #ffd873);

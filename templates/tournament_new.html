@@ -13,6 +13,9 @@
       <label>רמה</label>
       <input type="text" name="level" placeholder="למשל: מתקדמים, רמה 4-5" required>
 
+      <label>עלות השתתפות לאדם (₪, לא חובה)</label>
+      <input type="number" name="price_per_player" min="0" step="1" placeholder="השאר ריק אם חינם">
+
       <label>כמות זוגות</label>
       <select name="pairs_count" required>
         <option value="4">4 זוגות (בית אחד)</option>
@@ -27,6 +30,9 @@
         <option value="8">עד 8 games</option>
       </select>
       <p class="hint">אורך המשחקים בכל שלב הבא (רבע גמר, חצי גמר, גמר) ייבחר בנפרד כשמגיעים אליו.</p>
+
+      <label>אודות הטורניר (חוקים, מבנה וכו', לא חובה)</label>
+      <textarea name="about" rows="6" placeholder="מבנה התחרות, כללי שוברי שוויון וכו'"></textarea>
 
       <button type="submit" class="btn-block btn-gold">צור טורניר</button>
     </form>

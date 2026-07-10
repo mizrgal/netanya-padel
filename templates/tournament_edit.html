@@ -1,0 +1,47 @@
+{% extends "base_app.html" %}
+{% block title %}עריכת {{ tournament.name }} – Netanya Padel{% endblock %}
+{% block content %}
+  <h1>עריכת טורניר</h1>
+  <div class="card" style="max-width:420px;">
+    <form method="POST" action="{{ url_for('tournament_edit', tid=tournament.id) }}">
+      <label>שם הטורניר</label>
+      <input type="text" name="name" value="{{ tournament.name }}" required autofocus>
+
+      <label>תאריך</label>
+      <input type="date" name="date" value="{{ tournament.date }}" required>
+
+      <label>רמה</label>
+      <input type="text" name="level" value="{{ tournament.level }}" required>
+
+      <label>עלות השתתפות לאדם (₪, לא חובה)</label>
+      <input type="number" name="price_per_player" min="0" step="1"
+             value="{{ tournament.price_per_player|int if tournament.price_per_player is not none else '' }}"
+             placeholder="השאר ריק אם חינם">
+
+      {% if tournament.status == 'open' %}
+        <label>כמות זוגות</label>
+        <select name="pairs_count" required>
+          <option value="4" {% if tournament.pairs_count == 4 %}selected{% endif %}>4 זוגות (בית אחד)</option>
+          <option value="8" {% if tournament.pairs_count == 8 %}selected{% endif %}>8 זוגות (2 בתים)</option>
+          <option value="16" {% if tournament.pairs_count == 16 %}selected{% endif %}>16 זוגות (4 בתים)</option>
+        </select>
+
+        <label>אורך משחק בשלב הבתים</label>
+        <select name="game_target" required>
+          <option value="4" {% if tournament.game_target == 4 %}selected{% endif %}>עד 4 games</option>
+          <option value="6" {% if tournament.game_target == 6 %}selected{% endif %}>עד 6 games</option>
+          <option value="8" {% if tournament.game_target == 8 %}selected{% endif %}>עד 8 games</option>
+        </select>
+        <p class="hint">אפשר לשנות את אלה כל עוד הטורניר פתוח להרשמה. אי אפשר להקטין את כמות הזוגות מתחת למספר שכבר נרשם.</p>
+      {% else %}
+        <p class="hint" style="margin-top:0;">כמות הזוגות ואורך המשחק בבתים ננעלים לאחר שהטורניר מתמלא (כבר נקבע לגבי המשחקים הקיימים).</p>
+      {% endif %}
+
+      <label>אודות הטורניר (חוקים, מבנה וכו', לא חובה)</label>
+      <textarea name="about" rows="6" placeholder="מבנה התחרות, כללי שוברי שוויון וכו'">{{ tournament.about or '' }}</textarea>
+
+      <button type="submit" class="btn-block btn-gold">שמירה</button>
+    </form>
+  </div>
+  <p style="margin-top:14px;"><a href="{{ url_for('tournament_detail', tid=tournament.id) }}" class="muted">← חזרה לטורניר</a></p>
+{% endblock %}

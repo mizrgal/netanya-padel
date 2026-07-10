@@ -145,12 +145,18 @@ def get_tournament(tid):
     return rows[0] if rows else None
 
 
-def create_tournament(name, date, level, pairs_count, game_target, created_by):
+def create_tournament(name, date, level, pairs_count, game_target, created_by,
+                       price_per_player=None, about=None):
     return db_insert("padel_tournaments", {
         "name": name, "date": date, "level": level,
         "pairs_count": pairs_count, "groups_count": pairs_count // 4,
         "game_target": game_target, "status": "open", "created_by": created_by,
+        "price_per_player": price_per_player, "about": about,
     })
+
+
+def update_tournament(tid, updates):
+    db_patch("padel_tournaments", f"id=eq.{tid}", updates)
 
 
 def update_tournament_status(tid, status, winner_pair_id=None):
@@ -678,6 +684,20 @@ def index():
     return render_template("index.html", tournaments=tournaments)
 
 
+def parse_price(raw):
+    """Returns (price_or_None, error_message_or_None)."""
+    raw = raw.strip()
+    if not raw:
+        return None, None
+    try:
+        price = float(raw)
+    except ValueError:
+        return None, "עלות לא תקינה"
+    if price < 0:
+        return None, "עלות לא יכולה להיות שלילית"
+    return price, None
+
+
 @app.route("/tournaments/new", methods=["GET", "POST"])
 @admin_required
 def tournament_new():
@@ -687,16 +707,71 @@ def tournament_new():
         level = request.form.get("level", "").strip()
         pairs_count = request.form.get("pairs_count", "")
         game_target = request.form.get("game_target", "")
+        about = request.form.get("about", "").strip() or None
+        price, price_error = parse_price(request.form.get("price_per_player", ""))
         if not name or not date or not level:
             flash("נא למלא את כל השדות", "error")
         elif pairs_count not in ("4", "8", "16"):
             flash("יש לבחור כמות זוגות תקינה", "error")
         elif game_target not in ("4", "6", "8"):
             flash("יש לבחור משך משחק תקין", "error")
+        elif price_error:
+            flash(price_error, "error")
         else:
-            t = create_tournament(name, date, level, int(pairs_count), int(game_target), session["user_id"])
+            t = create_tournament(name, date, level, int(pairs_count), int(game_target),
+                                   session["user_id"], price_per_player=price, about=about)
             return redirect(url_for("tournament_detail", tid=t["id"]))
     return render_template("tournament_new.html")
+
+
+@app.route("/tournaments/<tid>/edit", methods=["GET", "POST"])
+@admin_required
+def tournament_edit(tid):
+    tournament = get_tournament(tid)
+    if not tournament:
+        return redirect(url_for("index"))
+
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        date = request.form.get("date", "").strip()
+        level = request.form.get("level", "").strip()
+        price, price_error = parse_price(request.form.get("price_per_player", ""))
+
+        if not name or not date or not level:
+            flash("נא למלא את כל השדות", "error")
+            return render_template("tournament_edit.html", tournament=tournament)
+        if price_error:
+            flash(price_error, "error")
+            return render_template("tournament_edit.html", tournament=tournament)
+
+        about = request.form.get("about", "").strip() or None
+        updates = {"name": name, "date": date, "level": level, "price_per_player": price, "about": about}
+
+        if tournament["status"] == "open":
+            pairs_count = request.form.get("pairs_count", "")
+            game_target = request.form.get("game_target", "")
+            if pairs_count not in ("4", "8", "16"):
+                flash("יש לבחור כמות זוגות תקינה", "error")
+                return render_template("tournament_edit.html", tournament=tournament)
+            if game_target not in ("4", "6", "8"):
+                flash("יש לבחור משך משחק תקין", "error")
+                return render_template("tournament_edit.html", tournament=tournament)
+            current_pairs = len(list_pairs(tid))
+            if int(pairs_count) < current_pairs:
+                flash(f"אי אפשר להקטין את כמות הזוגות מתחת ל-{current_pairs} (כבר רשומים)", "error")
+                return render_template("tournament_edit.html", tournament=tournament)
+            updates["pairs_count"] = int(pairs_count)
+            updates["groups_count"] = int(pairs_count) // 4
+            updates["game_target"] = int(game_target)
+
+        update_tournament(tid, updates)
+        tournament = get_tournament(tid)
+        if tournament["status"] == "open":
+            maybe_run_draw(tournament)
+        flash("פרטי הטורניר עודכנו", "success")
+        return redirect(url_for("tournament_detail", tid=tid))
+
+    return render_template("tournament_edit.html", tournament=tournament)
 
 
 @app.route("/tournaments/<tid>/delete", methods=["POST"])
