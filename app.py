@@ -260,6 +260,14 @@ def maybe_run_draw(tournament):
     update_tournament_status(tournament["id"], "full")
 
 
+def undo_draw(tid):
+    """Wipe the group-stage draw entirely: delete all group matches and clear every pair's
+    group_number. Leaves the tournament ready for maybe_run_draw() to shuffle a fresh one."""
+    delete_matches([m["id"] for m in list_matches(tid) if m["stage"] == "group"])
+    for p in list_pairs(tid):
+        update_pair_group(p["id"], None)
+
+
 def stage_order_for(tournament):
     groups_count = tournament["groups_count"]
     if groups_count == 1:
@@ -1004,10 +1012,7 @@ def delete_pair_route(tid, pid):
         # the draw already happened - removing one pair breaks every group's round-robin,
         # so undo the whole draw (no scores exist yet, nothing real is lost) and reopen
         # registration. A fresh draw runs automatically once the tournament refills.
-        delete_matches([m["id"] for m in list_matches(tid) if m["stage"] == "group"])
-        for p in list_pairs(tid):
-            if p["id"] != pid:
-                update_pair_group(p["id"], None)
+        undo_draw(tid)
         update_tournament_status(tid, "open")
 
     delete_pairs([pid])
@@ -1022,6 +1027,20 @@ def start_tournament(tid):
     if tournament and tournament["status"] == "full":
         update_tournament_status(tid, "in_progress")
         flash("הטורניר התחיל!", "success")
+    return redirect(url_for("tournament_detail", tid=tid))
+
+
+@app.route("/tournaments/<tid>/redraw", methods=["POST"])
+@admin_required
+def redraw_tournament(tid):
+    tournament = get_tournament(tid)
+    if not tournament or tournament["status"] != "full":
+        flash("אפשר להגריל מחדש רק אחרי שהטורניר מלא ולפני שהוא התחיל", "error")
+        return redirect(url_for("tournament_detail", tid=tid))
+    undo_draw(tid)
+    tournament = get_tournament(tid)
+    maybe_run_draw(tournament)  # pairs are still at full capacity, so this reshuffles immediately
+    flash("ההגרלה בוצעה מחדש", "success")
     return redirect(url_for("tournament_detail", tid=tid))
 
 
