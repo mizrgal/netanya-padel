@@ -43,7 +43,7 @@
     {% if tournament.location %} · 📍 {{ tournament.location }}{% endif %}
     · רמה {{ tournament.level }} · {{ tournament.pairs_count }} זוגות · עד {{ tournament.game_target }} games בשלב הבתים
     {% if tournament.price_per_player is not none %} · 💰 ₪{{ tournament.price_per_player|int }} לאדם{% endif %}
-    {% if tournament.manager %} · 👤 {{ tournament.manager }}{% endif %}
+    {% if tournament.manager %} · 👤 מנהל הטורניר: {{ tournament.manager }}{% endif %}
   </p>
 
   {% if tournament.about %}

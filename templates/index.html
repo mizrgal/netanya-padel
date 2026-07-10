@@ -19,7 +19,7 @@
             📅 {{ t.date }}
             {% if t.location %} &nbsp;·&nbsp; 📍 {{ t.location }}{% endif %}
             &nbsp;·&nbsp; רמה {{ t.level }}
-            {% if t.manager %} &nbsp;·&nbsp; 👤 {{ t.manager }}{% endif %}
+            {% if t.manager %} &nbsp;·&nbsp; 👤 מנהל הטורניר: {{ t.manager }}{% endif %}
           </div>
           <div class="registration-progress">
             <div class="progress-track"><div class="progress-fill" style="width: {{ (t.pairs_registered / t.pairs_count * 100)|round(0, 'floor')|int }}%"></div></div>
