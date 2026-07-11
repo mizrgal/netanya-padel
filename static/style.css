@@ -173,6 +173,25 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   vertical-align: middle;
 }
 
+.tournament-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 18px;
+}
+.meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--bg);
+  color: #555;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .badge {
   display: inline-block;
   padding: 3px 10px;
@@ -262,23 +281,25 @@ tr:last-child td { border-bottom: none; }
 .edit-toggle[open] summary { color: var(--navy); font-weight: 600; margin-bottom: 6px; }
 .edit-toggle .score-form { flex-wrap: wrap; }
 
-.about-card { margin-bottom: 20px; padding: 0; }
+.about-card { margin-bottom: 20px; padding: 0; overflow: hidden; }
 .about-card summary {
   cursor: pointer;
-  padding: 16px 20px;
+  padding: 14px 18px;
   font-weight: 700;
   font-size: 15px;
   list-style: none;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   border-radius: 16px;
+  background: linear-gradient(135deg, #fffaf0, #ffffff);
 }
 .about-card summary::-webkit-details-marker { display: none; }
 .about-card summary::after {
   content: '▾';
   color: #999;
   font-weight: 400;
+  font-size: 13px;
   transition: transform .2s;
 }
 .about-card[open] summary { border-bottom: 1px solid var(--border); border-radius: 16px 16px 0 0; }

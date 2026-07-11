@@ -38,13 +38,15 @@
   <h1>{{ tournament.name }}
     <span class="badge badge-{{ tournament.status }}">{{ STATUS_LABELS.get(tournament.status, tournament.status) }}</span>
   </h1>
-  <p class="muted">
-    {{ tournament.date }}
-    {% if tournament.location %} · 📍 {{ tournament.location }}{% endif %}
-    · רמה {{ tournament.level }} · {{ tournament.pairs_count }} זוגות · עד {{ tournament.game_target }} games בשלב הבתים
-    {% if tournament.price_per_player is not none %} · 💰 ₪{{ tournament.price_per_player|int }} לאדם{% endif %}
-    {% if tournament.manager %} · 👤 מנהל הטורניר: {{ tournament.manager }}{% endif %}
-  </p>
+  <div class="tournament-meta">
+    <span class="meta-item">📅 {{ tournament.date }}</span>
+    {% if tournament.location %}<span class="meta-item">📍 {{ tournament.location }}</span>{% endif %}
+    <span class="meta-item">🎯 רמה {{ tournament.level }}</span>
+    <span class="meta-item">👥 {{ tournament.pairs_count }} זוגות</span>
+    <span class="meta-item">🎾 עד {{ tournament.game_target }} משחקים בשלב הבתים</span>
+    {% if tournament.price_per_player is not none %}<span class="meta-item">💰 ₪{{ tournament.price_per_player|int }} לאדם</span>{% endif %}
+    {% if tournament.manager %}<span class="meta-item">👤 מנהל הטורניר: {{ tournament.manager }}</span>{% endif %}
+  </div>
 
   {% if tournament.about %}
     <details class="card about-card">
@@ -148,11 +150,11 @@
               <option value="1">משחק אחד</option>
               <option value="2">שני משחקים (טיי-ברייק אם 1-1)</option>
             </select>
-            <label>עד כמה games בכל משחק?</label>
+            <label>עד כמה משחקים בכל סט?</label>
             <select name="game_target" required>
-              <option value="4">עד 4 games</option>
-              <option value="6">עד 6 games</option>
-              <option value="8">עד 8 games</option>
+              <option value="4">עד 4 משחקים</option>
+              <option value="6">עד 6 משחקים</option>
+              <option value="8">עד 8 משחקים</option>
             </select>
             <button type="submit" class="btn-block btn-gold">התקדמו ל{{ STAGE_LABELS.get(pending_stage, pending_stage) }}</button>
           </form>
@@ -165,7 +167,7 @@
     {% for stage, matchups in knockout_stages %}
       <h2>{{ STAGE_LABELS.get(stage, stage) }}
         {% if matchups and matchups[0].legs and matchups[0].legs[0].game_target %}
-          <span class="muted" style="font-size:12px; font-weight:400;">(עד {{ matchups[0].legs[0].game_target }} games)</span>
+          <span class="muted" style="font-size:12px; font-weight:400;">(עד {{ matchups[0].legs[0].game_target }} משחקים)</span>
         {% endif %}
       </h2>
       {% for mu in matchups %}
@@ -196,7 +198,7 @@
       <div class="group-block">
         <h2 class="group-heading">בית {{ g }}
           {% if data.matches and data.matches[0].game_target %}
-            <span class="muted" style="font-size:12px; font-weight:400;">(עד {{ data.matches[0].game_target }} games)</span>
+            <span class="muted" style="font-size:12px; font-weight:400;">(עד {{ data.matches[0].game_target }} משחקים)</span>
           {% endif %}
         </h2>
         <div class="standings-card">

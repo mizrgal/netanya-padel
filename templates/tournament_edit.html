@@ -34,9 +34,9 @@
 
         <label>אורך משחק בשלב הבתים</label>
         <select name="game_target" required>
-          <option value="4" {% if tournament.game_target == 4 %}selected{% endif %}>עד 4 games</option>
-          <option value="6" {% if tournament.game_target == 6 %}selected{% endif %}>עד 6 games</option>
-          <option value="8" {% if tournament.game_target == 8 %}selected{% endif %}>עד 8 games</option>
+          <option value="4" {% if tournament.game_target == 4 %}selected{% endif %}>עד 4 משחקים</option>
+          <option value="6" {% if tournament.game_target == 6 %}selected{% endif %}>עד 6 משחקים</option>
+          <option value="8" {% if tournament.game_target == 8 %}selected{% endif %}>עד 8 משחקים</option>
         </select>
         <p class="hint">אפשר לשנות את אלה כל עוד הטורניר פתוח להרשמה. אי אפשר להקטין את כמות הזוגות מתחת למספר שכבר נרשם.</p>
       {% else %}
