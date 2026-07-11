@@ -262,9 +262,29 @@ tr:last-child td { border-bottom: none; }
 .edit-toggle[open] summary { color: var(--navy); font-weight: 600; margin-bottom: 6px; }
 .edit-toggle .score-form { flex-wrap: wrap; }
 
-.about-card { margin-bottom: 20px; }
-.about-card h2 { font-size: 15px; }
-.about-text { white-space: pre-line; font-size: 14px; line-height: 1.7; color: #444; }
+.about-card { margin-bottom: 20px; padding: 0; }
+.about-card summary {
+  cursor: pointer;
+  padding: 16px 20px;
+  font-weight: 700;
+  font-size: 15px;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 16px;
+}
+.about-card summary::-webkit-details-marker { display: none; }
+.about-card summary::after {
+  content: '▾';
+  color: #999;
+  font-weight: 400;
+  transition: transform .2s;
+}
+.about-card[open] summary { border-bottom: 1px solid var(--border); border-radius: 16px 16px 0 0; }
+.about-card[open] summary::after { transform: rotate(180deg); }
+.about-card summary:hover { background: var(--bg); }
+.about-text { white-space: pre-line; font-size: 14px; line-height: 1.7; color: #444; padding: 16px 20px 20px; }
 
 .winner-banner {
   background: linear-gradient(135deg, var(--gold), #ffd873);

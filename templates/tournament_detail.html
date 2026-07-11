@@ -47,10 +47,10 @@
   </p>
 
   {% if tournament.about %}
-    <div class="card about-card">
-      <h2 style="margin-top:0;">📋 אודות הטורניר</h2>
+    <details class="card about-card">
+      <summary>📋 אודות הטורניר</summary>
       <div class="about-text">{{ tournament.about }}</div>
-    </div>
+    </details>
   {% endif %}
 
   {% if session.get('is_admin') %}
