@@ -6,14 +6,33 @@ import random
 GROUP_ROUND_ORDER = [(0, 1), (2, 3), (0, 2), (1, 3), (0, 3), (1, 2)]
 GROUP_ROUNDS = [1, 1, 2, 2, 3, 3]
 
+# groups of 3 have no parallel rounds - each pair sits out one round (round robin bye)
+TRIO_ROUND_ORDER = [(0, 1), (0, 2), (1, 2)]
+TRIO_ROUNDS = [1, 2, 3]
+
+# pairs_count -> groups_count. 12 pairs is 4 groups of 3 (not 4 groups of 4), everything
+# else divides evenly into groups of 4.
+GROUPS_COUNT_BY_PAIRS = {4: 1, 8: 2, 12: 4, 16: 4}
+
+
+def groups_count_for_pairs(pairs_count):
+    if pairs_count not in GROUPS_COUNT_BY_PAIRS:
+        raise ValueError(f"unsupported pairs_count {pairs_count}")
+    return GROUPS_COUNT_BY_PAIRS[pairs_count]
+
 
 def round_robin_matches(pair_ids):
-    """4 pair ids -> 6 (round_number, pair_a_id, pair_b_id) tuples, 3 rounds of 2 parallel matches."""
-    if len(pair_ids) != 4:
-        raise ValueError("groups must have exactly 4 pairs")
+    """3 or 4 pair ids -> (round_number, pair_a_id, pair_b_id) tuples for a full round robin
+    (every pair plays every other pair in the group exactly once)."""
+    if len(pair_ids) == 4:
+        order, rounds = GROUP_ROUND_ORDER, GROUP_ROUNDS
+    elif len(pair_ids) == 3:
+        order, rounds = TRIO_ROUND_ORDER, TRIO_ROUNDS
+    else:
+        raise ValueError("groups must have exactly 3 or 4 pairs")
     return [
         (round_no, pair_ids[a], pair_ids[b])
-        for (a, b), round_no in zip(GROUP_ROUND_ORDER, GROUP_ROUNDS)
+        for (a, b), round_no in zip(order, rounds)
     ]
 
 
@@ -25,18 +44,17 @@ def run_draw(pair_ids):
       matches = [{"stage": "group", "group_number": n, "round_number": r,
                   "pair_a_id": ..., "pair_b_id": ...}, ...]
     """
-    if len(pair_ids) % 4 != 0:
-        raise ValueError("pair count must be a multiple of 4")
+    groups_count = groups_count_for_pairs(len(pair_ids))
+    group_size = len(pair_ids) // groups_count
     shuffled = list(pair_ids)
     random.shuffle(shuffled)
-    groups_count = len(shuffled) // 4
 
     group_assignments = {}
     matches = []
     idx = 0
     for g in range(groups_count):
         group_number = g + 1
-        group_pairs = shuffled[g * 4:(g + 1) * 4]
+        group_pairs = shuffled[g * group_size:(g + 1) * group_size]
         for pid in group_pairs:
             group_assignments[pid] = group_number
         for round_no, a, b in round_robin_matches(group_pairs):

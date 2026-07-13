@@ -149,7 +149,7 @@ def create_tournament(name, date, level, pairs_count, game_target, created_by,
                        price_per_player=None, about=None, manager=None, location=None):
     return db_insert("padel_tournaments", {
         "name": name, "date": date, "level": level,
-        "pairs_count": pairs_count, "groups_count": pairs_count // 4,
+        "pairs_count": pairs_count, "groups_count": engine.groups_count_for_pairs(pairs_count),
         "game_target": game_target, "status": "open", "created_by": created_by,
         "price_per_player": price_per_player, "about": about,
         "manager": manager, "location": location,
@@ -714,7 +714,7 @@ def tournament_new():
         price, price_error = parse_price(request.form.get("price_per_player", ""))
         if not name or not date or not level:
             flash("נא למלא את כל השדות", "error")
-        elif pairs_count not in ("4", "8", "16"):
+        elif pairs_count not in ("4", "8", "12", "16"):
             flash("יש לבחור כמות זוגות תקינה", "error")
         elif game_target not in ("4", "6", "8"):
             flash("יש לבחור משך משחק תקין", "error")
@@ -757,7 +757,7 @@ def tournament_edit(tid):
         if tournament["status"] == "open":
             pairs_count = request.form.get("pairs_count", "")
             game_target = request.form.get("game_target", "")
-            if pairs_count not in ("4", "8", "16"):
+            if pairs_count not in ("4", "8", "12", "16"):
                 flash("יש לבחור כמות זוגות תקינה", "error")
                 return render_template("tournament_edit.html", tournament=tournament)
             if game_target not in ("4", "6", "8"):
@@ -768,7 +768,7 @@ def tournament_edit(tid):
                 flash(f"אי אפשר להקטין את כמות הזוגות מתחת ל-{current_pairs} (כבר רשומים)", "error")
                 return render_template("tournament_edit.html", tournament=tournament)
             updates["pairs_count"] = int(pairs_count)
-            updates["groups_count"] = int(pairs_count) // 4
+            updates["groups_count"] = engine.groups_count_for_pairs(int(pairs_count))
             updates["game_target"] = int(game_target)
 
         update_tournament(tid, updates)
