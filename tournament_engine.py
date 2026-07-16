@@ -175,11 +175,14 @@ def generate_next_stage(tournament_pairs_count, groups_count, current_stage, sta
                 {"pair_a_id": _qualifier_pair_id(qualifiers, 2, 1), "pair_b_id": _qualifier_pair_id(qualifiers, 1, 2)},
             ])
         if groups_count == 4:
+            # A x D / B x C crossover, with each group's two qualifiers sent to opposite
+            # bracket halves (rank 1 of a group and rank 2 of that same group can then only
+            # meet again in the final, never as early as the semifinal).
             return "quarterfinal", _with_match_index([
-                {"pair_a_id": _qualifier_pair_id(qualifiers, 1, 1), "pair_b_id": _qualifier_pair_id(qualifiers, 3, 2)},
-                {"pair_a_id": _qualifier_pair_id(qualifiers, 3, 1), "pair_b_id": _qualifier_pair_id(qualifiers, 1, 2)},
-                {"pair_a_id": _qualifier_pair_id(qualifiers, 2, 1), "pair_b_id": _qualifier_pair_id(qualifiers, 4, 2)},
-                {"pair_a_id": _qualifier_pair_id(qualifiers, 4, 1), "pair_b_id": _qualifier_pair_id(qualifiers, 2, 2)},
+                {"pair_a_id": _qualifier_pair_id(qualifiers, 1, 1), "pair_b_id": _qualifier_pair_id(qualifiers, 4, 2)},
+                {"pair_a_id": _qualifier_pair_id(qualifiers, 2, 1), "pair_b_id": _qualifier_pair_id(qualifiers, 3, 2)},
+                {"pair_a_id": _qualifier_pair_id(qualifiers, 1, 2), "pair_b_id": _qualifier_pair_id(qualifiers, 3, 1)},
+                {"pair_a_id": _qualifier_pair_id(qualifiers, 2, 2), "pair_b_id": _qualifier_pair_id(qualifiers, 4, 1)},
             ])
         raise ValueError(f"unsupported groups_count {groups_count}")
 
